@@ -27,6 +27,7 @@ function pixelHead(o, p) {
   const l = low.getContext('2d'), st = getComputedStyle(h);
   l.setTransform(1 / block, 0, 0, 1 / block, 0, 0);
   l.fillStyle = '#f5f5f7'; l.textBaseline = 'alphabetic'; l.font = `${st.fontWeight} ${st.fontSize} ${st.fontFamily}`;
+  if ('fontStretch' in l) l.fontStretch = 'expanded';
   if ('letterSpacing' in l) l.letterSpacing = st.letterSpacing;
   spans.forEach(s => { const r = s.getBoundingClientRect(); l.fillText(s.textContent.toUpperCase(), r.left - box.left, r.top - box.top + r.height * .82); });
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height);
