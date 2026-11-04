@@ -55,7 +55,7 @@ section{padding:clamp(60px,9vh,100px) 22px 0;max-width:1120px;margin:0 auto;over
 .chips.mid{justify-content:center}
 .chips button{appearance:none;border:1px solid var(--edge);background:transparent;color:var(--g);font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:9px 13px;border-radius:999px;cursor:pointer}
 .chips button.on{color:#000;background:var(--w);border-color:var(--w)}
-.mt{margin-top:16px}
+.chiplabel{font-size:12px;font-weight:700;font-stretch:125%;letter-spacing:.04em;text-transform:uppercase;color:var(--w);margin:18px 0 8px}
 
 #padwrap{position:relative;width:100%;max-width:480px;margin:0 auto;aspect-ratio:480/530;border-radius:10px;overflow:hidden;border:1px solid var(--edge)}
 #padwrap iframe{position:absolute;left:0;top:0;width:480px;height:530px;transform-origin:0 0;border:0}
@@ -117,7 +117,7 @@ select{appearance:none;-webkit-appearance:none;border:0;background-color:#303034
 @media (prefers-reduced-motion:reduce){.up{opacity:1;transform:none;transition:none}}
 @media (max-width:760px){
   .split{grid-template-columns:minmax(0,1fr)}.split.flip>:first-child{order:0}.split h2{text-align:center}.split p{text-align:center}
-  .split .chips{justify-content:center}
+  .split .chips{justify-content:center}.chiplabel{text-align:center}
   .numbers{grid-template-columns:repeat(4,1fr);gap:4px}.numbers span{font-size:12px}
   .bento{grid-template-columns:repeat(2,1fr)}.bento p{font-size:14px}.bento.three{grid-template-columns:1fr}
   .skins{grid-template-columns:repeat(3,1fr)}
@@ -151,7 +151,7 @@ select{appearance:none;-webkit-appearance:none;border:0;background-color:#303034
 <section class="split">
   <div><h2>Sixteen pads. Zero excuses.</h2>
   <p class="up">The instant feel of a drum machine. Play with keyboard, MIDI or mouse. Trim, chop, reverse, stretch, pitch and choke every pad. Hit one.</p>
-  <div class="chips mt up" id="animchips"></div><div class="chips mt up" id="padskins"></div></div>
+  <div class="chiplabel up">Pad animation</div><div class="chips up" id="animchips"></div><div class="chiplabel up">Skin</div><div class="chips up" id="padskins"></div></div>
   <div class="up"><div id="padwrap"><iframe id="padframe" title="Pads" src="pads.html?form=pad&amp;skin=3d_graphit" loading="lazy"></iframe></div></div>
 </section>
 
