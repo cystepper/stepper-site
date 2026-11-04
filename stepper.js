@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from './lib/RoundedBoxGeometry.js';
 import { mergeGeometries } from './lib/BufferGeometryUtils.js';
-import { EFFECTS, newState, stepState, paintEffect, Visual, loadBin, paintDancer, mixColour } from './live.js';
+import { EFFECTS, newState, stepState, paintEffect, Visual, loadBin, paintDancer, paintClip, CLIPS, mixColour } from './live.js';
 
 const SKINS = [
  ['3d_camouflage','Camouflage',0x25261a,.35,.62],['3d_graphit','Graphite',0x1a1a1d,.65,.42],['3d_steel','Brushed Steel',0x8f908e,1,.36],['3d_clear','Transparent Tech',0xaab3ae,.2,.22],
@@ -112,7 +112,18 @@ const padGeos = [];
 PADY.forEach(y => PADX.forEach(x => padGeos.push(raisedGeometry(x + 5, y + 5, x + 133, y + 133, .26, .07))));
 
 const MARGIN = .7, THICK = 1.7;
-const bodyGeo = new RoundedBoxGeometry(W + MARGIN * 2, THICK, D + MARGIN * 2, 6, .3);
+// A pattern laid over from each side in turn, at one size everywhere, so nothing is stretched along an edge.
+function boxMapped(geo) {
+  const pos = geo.attributes.position, nor = geo.attributes.normal, uv = geo.attributes.uv, k = 1 / 10.24, kv = 1 / 5.12;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), nx = Math.abs(nor.getX(i)), ny = Math.abs(nor.getY(i)), nz = Math.abs(nor.getZ(i));
+    if (ny >= nx && ny >= nz) uv.setXY(i, x * k, z * kv);
+    else if (nx >= nz) uv.setXY(i, (z + 7.3) * k, y * kv);
+    else uv.setXY(i, (x + 3.1) * k, y * kv);
+  }
+  return geo;
+}
+const bodyGeo = boxMapped(new RoundedBoxGeometry(W + MARGIN * 2, THICK, D + MARGIN * 2, 6, .3));
 const seatGeo = new THREE.BoxGeometry(W + .14, .03, D + .14);
 const plateGeo = new THREE.PlaneGeometry(W, D);
 const footGeo = (() => {
@@ -131,10 +142,10 @@ const glassGeo = mergeGeometries(GLASS.map(([a, b, c, d]) => new THREE.PlaneGeom
 
 // What only a real machine has: a metal rim around the face, a base plate, and sockets and vents in its front.
 const FRONT = D / 2 + MARGIN;
-const rimGeo = mergeGeometries([
+const rimGeo = boxMapped(mergeGeometries([
   new THREE.BoxGeometry(W + .34, .07, .11).translate(0, -.006, -D / 2 - .115), new THREE.BoxGeometry(W + .34, .07, .11).translate(0, -.006, D / 2 + .115),
   new THREE.BoxGeometry(.11, .07, D + .12).translate(-W / 2 - .115, -.006, 0), new THREE.BoxGeometry(.11, .07, D + .12).translate(W / 2 + .115, -.006, 0),
-]);
+]));
 const baseGeo = new RoundedBoxGeometry(W + MARGIN * 2 - .28, .22, D + MARGIN * 2 - .28, 3, .08);
 const ventGeo = mergeGeometries(Array.from({ length: 44 }, (_, i) => new THREE.BoxGeometry(.075, .3, .03).translate(-W / 2 + 1 + i * .17, -THICK * .52, FRONT + .003)));
 const socketGeo = mergeGeometries([0, 1, 2].flatMap(i => [new THREE.CylinderGeometry(.13, .13, .05, 24).rotateX(Math.PI / 2).translate(W / 2 - 1.1 - i * .62, -THICK * .52, FRONT)]));
@@ -150,7 +161,6 @@ const capMat = new THREE.MeshStandardMaterial({ color: 0x8c8c90, roughness: .3, 
 const markMat = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: .4, emissive: 0xffffff, emissiveIntensity: .35 });
 const faderMat = new THREE.MeshStandardMaterial({ color: 0xb6b6b8, roughness: .35, metalness: .85 });
 const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: .03, transparent: true, opacity: .13, clearcoat: 1, clearcoatRoughness: .02, envMapIntensity: 2.6 });
-const rimMat = new THREE.MeshStandardMaterial({ color: 0x9a9a9d, metalness: 1, roughness: .28 });
 const ledMat = new THREE.MeshStandardMaterial({ color: 0x33ff88, emissive: 0x33ff88, emissiveIntensity: 2.4 });
 
 // Only so many machines exist, and they take on whichever skins are in view as the ring turns.
@@ -172,6 +182,12 @@ glow.renderOrder = 3;
 scene.add(glow);
 const glowWanted = new THREE.Color(0x8a8a90);
 const STEP = Math.PI / 4.4, REACH = 2;      // Angle between neighbours, and how many are built to each side.
+const insideGeo = new THREE.BoxGeometry(W + MARGIN * 2 - .5, THICK * .55, D + MARGIN * 2 - .5).translate(0, -THICK * .55, 0);
+let insideShared = null;
+function insideMat() {
+  if (!insideShared) { const t = new THREE.TextureLoader().load('skins/inside_clear.jpg'); t.colorSpace = THREE.SRGBColorSpace; insideShared = new THREE.MeshStandardMaterial({ map: t, roughness: .55, metalness: .25 }); }
+  return insideShared;
+}
 class Machine {
   constructor() {
     this.group = new THREE.Group();
@@ -181,6 +197,9 @@ class Machine {
     const add = (geo, mat, shadow = true) => { const m = new THREE.Mesh(geo, mat); m.castShadow = shadow; this.tilt.add(m); return m; };
     this.bodyMat = new THREE.MeshPhysicalMaterial({ clearcoat: .25, clearcoatRoughness: .5 });
     const body = add(bodyGeo, this.bodyMat); body.position.y = -THICK / 2 - .015; body.receiveShadow = true;
+    this.body = body;
+    // What can be seen through the clear case: the boards inside it, as on the skin's own surface.
+    this.inside = add(insideGeo, insideMat(), false); this.inside.visible = false;
     add(seatGeo, blackMat, false).position.y = -.018;
     // The displays give off a little light of their own.
     this.faceMat = new THREE.MeshPhysicalMaterial({ roughness: .55, metalness: .1, bumpScale: .7, clearcoat: .18, clearcoatRoughness: .55, emissive: 0xffffff, emissiveIntensity: .1 });
@@ -190,7 +209,7 @@ class Machine {
     add(footGeo, rubberMat); add(screwGeo, screwMat, false);
     add(knobGeo, knobMat); add(capGeo, capMat, false); add(markGeo, markMat, false); add(faderGeo, faderMat);
     add(glassGeo, glassMat, false);
-    add(rimGeo, rimMat, false); add(ventGeo, blackMat, false); add(socketGeo, screwMat, false); add(holeGeo, blackMat, false); add(ledGeo, ledMat, false); add(ringGeo, screwMat, false);
+    add(rimGeo, this.bodyMat, false); add(ventGeo, blackMat, false); add(socketGeo, screwMat, false); add(holeGeo, blackMat, false); add(ledGeo, ledMat, false); add(ringGeo, screwMat, false);
     add(baseGeo, rubberMat).position.y = -THICK - .09;
     this.pads = padGeos.map(geo => {
       const material = new THREE.MeshPhysicalMaterial({ roughness: .72, vertexColors: true, clearcoat: .15, clearcoatRoughness: .7, emissive: 0xffffff, emissiveIntensity: 0 });
@@ -212,11 +231,19 @@ class Machine {
     if (this.skin === index) return;
     this.skin = index;
     const skin = SKINS[index];
-    this.bodyMat.color.setHex(skin.body);
-    this.bodyMat.metalness = skin.metal;
-    this.bodyMat.roughness = skin.rough;
+    const pattern = PLATES.has(skin.key), clear = skin.key === '3d_clear', steel = skin.key === '3d_steel', m = this.bodyMat;
+    m.map = pattern ? plateOf(skin.key) : null;
+    m.color.setHex(clear ? 0xeaf3ef : pattern ? 0xffffff : skin.body);
+    m.metalness = steel ? .92 : clear ? 0 : pattern ? .08 : skin.metal;
+    m.roughness = steel ? .38 : clear ? .07 : pattern ? .62 : skin.rough;
+    m.transparent = clear; m.opacity = clear ? .3 : 1; m.depthWrite = !clear; m.clearcoat = clear ? 1 : .25; m.clearcoatRoughness = clear ? .05 : .5;
+    m.needsUpdate = true;
+    this.inside.visible = clear;
+    this.body.castShadow = !clear;
     textureOf(index).then(t => {
       if (this.skin !== index) return;
+      if (!pattern && !clear) paintBodyFrom(t, skin, m);
+      this.tray = sampleColour(t, .17, .34, .12, .06); this.trayText = this.tray.lum > .42 ? '#111214' : '#e8e9eb'; this.tray = this.tray.css;
       this.faceMat.map = this.faceMat.bumpMap = this.faceMat.emissiveMap = this.keyMat.map = t;
       this.faceMat.needsUpdate = this.keyMat.needsUpdate = true;
       this.pads.forEach(p => { p.material.map = p.material.emissiveMap = t; p.material.needsUpdate = true; });
@@ -225,6 +252,30 @@ class Machine {
   }
 }
 
+const PLATES = new Set(['3d_camouflage', '3d_desert', '3d_urban', '3d_snow', '3d_steel']), plates = new Map();
+function plateOf(key) {
+  if (!plates.has(key)) { const t = loader.load(`skins/plate_${key}.jpg`); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.MirroredRepeatWrapping; t.anisotropy = anisotropy; plates.set(key, t); }
+  return plates.get(key);
+}
+function sampleColour(t, fx, fy, fw, fh) {
+  const g = sampler.getContext('2d', { willReadFrequently: true }), w = t.image.naturalWidth || t.image.width, h = t.image.naturalHeight || t.image.height;
+  g.drawImage(t.image, w * fx, h * fy, w * fw, h * fh, 0, 0, 60, 6);
+  const d = g.getImageData(0, 0, 60, 6).data; let r = 0, gr = 0, b = 0;
+  for (let i = 0; i < d.length; i += 4) { r += d[i]; gr += d[i + 1]; b += d[i + 2]; }
+  const n = d.length / 4; r /= n; gr /= n; b /= n;
+  return { css: `rgb(${Math.round(r)},${Math.round(gr)},${Math.round(b)})`, lum: (.2126 * r + .7152 * gr + .0722 * b) / 255 };
+}
+// The frame takes the main colour of the machine's own face.
+const sampler = document.createElement('canvas'); sampler.width = 60; sampler.height = 6;
+function paintBodyFrom(t, skin, mat) {
+  const g = sampler.getContext('2d', { willReadFrequently: true }), w = t.image.naturalWidth || t.image.width, h = t.image.naturalHeight || t.image.height;
+  g.drawImage(t.image, w * .36, h * .955, w * .3, h * .016, 0, 0, 60, 6);
+  const d = g.getImageData(0, 0, 60, 6).data; let r = 0, gr = 0, b = 0;
+  for (let i = 0; i < d.length; i += 4) { r += d[i]; gr += d[i + 1]; b += d[i + 2]; }
+  const n = d.length / 4, c = new THREE.Color().setRGB(r / n / 255, gr / n / 255, b / n / 255, THREE.SRGBColorSpace), light = (c.r + c.g + c.b) / 3;
+  mat.color.copy(c);
+  if (light > .25) { mat.metalness = .06; mat.roughness = .5; } else mat.metalness = Math.min(skin.metal, .5);
+}
 const loader = new THREE.TextureLoader(), textures = new Map(), anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 function textureOf(index) {
   if (!textures.has(index)) textures.set(index, new Promise(ok => loader.load(`skins/${SKINS[index].key}.jpg`, t => {
@@ -334,13 +385,22 @@ document.getElementById('prev').onclick = () => go(-1);
 document.getElementById('next').onclick = () => go(1);
 addEventListener('keydown', e => { if (scrollY < innerHeight * .6) { if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); } });
 
-// ---- The front machine runs: output display, dancer, effect windows, position and play head, as in the app --------------------
-const LIVE = { skins: null, dancer: null, visual: new Visual(), reso: newState(), clip: newState() };
+// ---- The machines run: every model with its own display, dance and effect colours, as in the app ---------------------------------
+const LIVE = { skins: null, dancer: null, clips: new Map(), visual: new Visual(), reso: newState(), clip: newState() };
 fetch('data/skins.json').then(r => r.json()).then(d => LIVE.skins = d);
 loadBin('dancers').then(d => LIVE.dancer = d);
+CLIPS.forEach(c => { if (!small) loadBin(c).then(d => LIVE.clips.set(c, d)); });
 const RESO = EFFECTS.find(e => e.k === 'resonance'), SOFT = EFFECTS.find(e => e.k === 'softClipper');
 const resoP = RESO.p.map(q => q.def); resoP[0] = 100; resoP[7] = 18; resoP[9] = -24; resoP[10] = 30; resoP[11] = -12;
 const softP = SOFT.p.map(q => q.def); softP[0] = 8; softP[2] = 100;
+const RESO_KNOBS = [[51,219,'Depth',1],[151,219,'Sharpness',.5],[252,219,'Selectivity',.5],[353,219,'Attack',.09],[453,219,'Release',.22],[554,219,'Mix',1]];
+const SOFT_KNOBS = [[75,175,'',.33],[227,175,'',.99],[379,175,'',1],[531,175,'',1]];
+const pick = (i, n) => ((i % n) + n) % n;
+const DANCE_ORDER = [7, 0, 4, 11, 5, 6, 1, 8, 3, 9, 2, 10, 12];
+const SAMPLE_WORDS = ['KICK','SNARE','CLAP','HIHAT','OPEN HAT','808','RIM','PERC','SHAKER','TOM','CRASH','RIDE','VOX CHOP','STAB','RISER','FX HIT','SUB','COWBELL','SNAP','LOOP'];
+const SAMPLE_NAMES = Array.from({ length: 80 }, (_, i) => `${SAMPLE_WORDS[i % 20]} ${(i * 7) % 19 + 1}.WAV`);
+const SAMPLE_TIMES = SAMPLE_NAMES.map((_, i) => `0:0${(i * 3) % 3}.${String((i * 37) % 90 + 10)}`);
+
 function liveLayer(x0, y0, x1, y1, scale, y = .02) {
   const c = document.createElement('canvas'), w = x1 - x0, h = y1 - y0;
   c.width = Math.round(w * scale); c.height = Math.round(h * scale);
@@ -349,38 +409,91 @@ function liveLayer(x0, y0, x1, y1, scale, y = .02) {
   m.position.set(X((x0 + x1) / 2), y, Z((y0 + y1) / 2));
   return { c, t, m, g: c.getContext('2d'), w, h, scale };
 }
-const layers = small ? { out: liveLayer(1356, 97, 1906, 163, 1), man: liveLayer(1917, 97, 1983, 163, 1), reso: liveLayer(1360, 263, 1964, 414, 1), clip: liveLayer(1360, 545, 1964, 650, 1), pos: liveLayer(1062, 11, 1155, 41, 2) }
-  : { out: liveLayer(1356, 97, 1906, 163, 1.5), man: liveLayer(1917, 97, 1983, 163, 2), reso: liveLayer(1360, 263, 1964, 414, 1.5), clip: liveLayer(1360, 545, 1964, 650, 1.5), pos: liveLayer(1062, 11, 1155, 41, 2.5) };
-const playKey = liveLayer(721, 9, 770, 41, 2, .118);
 const headMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .8 });
-const headSeq = new THREE.Mesh(new THREE.BoxGeometry(.016, .012, 3.27), headMat), headRoll = new THREE.Mesh(new THREE.BoxGeometry(.016, .012, 2.79), headMat);
-headSeq.position.set(X(168), .024, Z(940)); headRoll.position.set(X(1073), .024, Z(964));
-let liveHost = null, liveBeat = 0, liveLevel = 0, liveLast = 0;
+const headSeqGeo = new THREE.BoxGeometry(.016, .012, 3.27), headRollGeo = new THREE.BoxGeometry(.016, .012, 2.79);
+const q = small ? 1 : 1.5;
+machines.forEach(m => {
+  m.live = { out: liveLayer(1356, 97, 1906, 163, q), man: liveLayer(1917, 97, 1983, 163, small ? 1 : 2), reso: liveLayer(1357, 224, 1968, 492, q), clip: liveLayer(1357, 503, 1968, 702, q), pos: liveLayer(1062, 11, 1155, 41, 2), lib: liveLayer(17, 141, 648, 584, q), key: liveLayer(721, 9, 770, 41, 2, .118), seq: new THREE.Mesh(headSeqGeo, headMat), roll: new THREE.Mesh(headRollGeo, headMat), skin: -1 };
+  ['out', 'man', 'reso', 'clip', 'pos', 'lib', 'key'].forEach(k => m.tilt.add(m.live[k].m));
+  m.live.seq.position.set(X(168), .024, Z(940)); m.live.roll.position.set(X(1073), .024, Z(964));
+  m.tilt.add(m.live.seq, m.live.roll);
+});
+const fit2 = l => l.g.setTransform(l.scale, 0, 0, l.scale, 0, 0);
+function card(l, name, sum, colour, knobs, top, height, drawPicture, sk) {
+  const g = l.g; fit2(l);
+  g.fillStyle = '#17181b'; g.fillRect(0, 0, l.w, l.h);
+  g.save(); g.translate(0, top); g.beginPath(); g.rect(0, 0, l.w, height); g.clip(); drawPicture(g, l.w, height); g.restore();
+  g.strokeStyle = colour; g.lineWidth = 1.5; g.strokeRect(1, 1, l.w - 2, l.h - 2);
+  g.fillStyle = colour; g.beginPath(); g.arc(19, 19, 6, 0, 7); g.fill();
+  g.font = 'bold 16px Helvetica, Arial, sans-serif'; g.textBaseline = 'middle'; g.fillText(name, 54, 19.5);
+  const nw = g.measureText(name).width;
+  g.fillStyle = '#a6a6ac'; g.font = '14px Helvetica, Arial, sans-serif'; g.fillText(sum, 54 + nw + 12, 19.5);
+  g.fillStyle = colour; g.globalAlpha = .16; g.fillRect(l.w - 88, 8, 46, 22); g.globalAlpha = 1; g.font = '13px Helvetica, Arial, sans-serif'; g.fillText('14', l.w - 66, 19.5);
+  g.strokeStyle = colour; g.lineWidth = 1.2; g.strokeRect(l.w - 83, 12, 8, 7); g.strokeRect(l.w - 80, 16, 8, 7);
+  g.strokeStyle = '#e1e1e4'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(l.w - 113, 14); g.lineTo(l.w - 103, 24); g.moveTo(l.w - 103, 14); g.lineTo(l.w - 113, 24); g.moveTo(l.w - 30, 22); g.lineTo(l.w - 25, 16); g.lineTo(l.w - 20, 22); g.stroke();
+  knobs.forEach(([x, y, label, share]) => {
+    const st = -Math.PI * 1.25, en = Math.PI * .25;
+    g.lineWidth = 3; g.strokeStyle = '#3d3e42'; g.beginPath(); g.arc(x, y, 21, st, en); g.stroke();
+    if (share > 0) { g.strokeStyle = colour; g.beginPath(); g.arc(x, y, 21, st, st + share * (en - st)); g.stroke(); }
+    if (label) { g.fillStyle = '#a6a6ac'; g.font = '13px Helvetica, Arial, sans-serif'; g.textAlign = 'center'; g.fillText(label.toUpperCase(), x, y + 38); g.textAlign = 'left'; }
+  });
+  g.textBaseline = 'alphabetic'; l.t.needsUpdate = true;
+}
+function library(l, tray, text, beat, seed) {
+  const g = l.g; fit2(l); g.fillStyle = tray; g.fillRect(0, 0, l.w, l.h);
+  const row = 29, tick = Math.floor(beat * 4), offset = tick + seed * 11, lit = 5 + (tick % 7);
+  g.font = '16px Helvetica, Arial, sans-serif'; g.textBaseline = 'middle';
+  for (let i = 0; i < 16; i++) {
+    const n = (offset + i) % SAMPLE_NAMES.length, y = 4 + i * row;
+    if (i === lit) { g.fillStyle = text; g.globalAlpha = .16; g.fillRect(0, y, l.w, row); g.globalAlpha = 1; }
+    g.fillStyle = text; g.globalAlpha = i === lit ? 1 : .82; g.fillText(SAMPLE_NAMES[n], 96, y + row / 2 + 1);
+    g.globalAlpha = .6; g.textAlign = 'right'; g.font = '14px Helvetica, Arial, sans-serif'; g.fillText(SAMPLE_TIMES[n], l.w - 22, y + row / 2 + 1); g.textAlign = 'left'; g.font = '16px Helvetica, Arial, sans-serif'; g.globalAlpha = 1;
+  }
+  g.textBaseline = 'alphabetic'; l.t.needsUpdate = true;
+}
+function drawMachine(m, index, now, sk) {
+  const L = m.live, skinIndex = m.skin, col = t => mixColour(sk.level1, sk.level2, t), beat = liveBeat + index * .5;
+  const clipPick = pick(skinIndex, 6) === 5 ? CLIPS[pick(skinIndex, CLIPS.length)] : null;
+  const o = L.out; fit2(o); o.g.fillStyle = '#101113'; o.g.fillRect(0, 0, o.w, o.h);
+  if (clipPick && LIVE.clips.get(clipPick)) paintClip(o.g, o.w, o.h, LIVE.clips.get(clipPick), beat, col);
+  else LIVE.visual.paint(o.g, o.w, o.h, pick(skinIndex, 4), pick(skinIndex, 3) + 2, col);
+  o.t.needsUpdate = true;
+  const a = L.man; fit2(a); a.g.fillStyle = '#101113'; a.g.fillRect(0, 0, a.w, a.h);
+  if (LIVE.dancer) paintDancer(a.g, a.w, a.h, LIVE.dancer, DANCE_ORDER[pick(skinIndex, 13)], beat, sk.screenText);
+  a.t.needsUpdate = true;
+  const c1 = sk.effects[pick(skinIndex * 3 + 1, 8)], c2 = sk.effects[pick(skinIndex * 5 + 4, 8)], pal = { clipper: sk.clipper, text: '#e1e1e4', edge: '#2b2c30', faint: '#a6a6ac', accent: sk.accent, accentText: sk.accentText };
+  card(L.reso, 'RESONANCE SUPPRESSOR', 'DEPTH 100 %', c1, RESO_KNOBS, 40, 140, (g, w, h) => paintEffect(g, w, h, 'resonance', resoP, LIVE.reso, true, { ...pal, colour: c1 }), sk);
+  card(L.clip, 'SOFT CLIPPER', 'SOFTNESS 100 %', c2, SOFT_KNOBS, 40, 108, (g, w, h) => paintEffect(g, w, h, 'softClipper', softP, LIVE.clip, true, { ...pal, colour: c2 }), sk);
+  if (m.tray) library(L.lib, m.tray, m.trayText, beat, skinIndex);
+  const p = L.pos; fit2(p); p.g.fillStyle = '#101113'; p.g.fillRect(0, 0, p.w, p.h);
+  const bar = Math.floor(beat / 4) % 8 + 1, bt = Math.floor(beat) % 4 + 1, st = Math.floor(beat * 4) % 4 + 1;
+  p.g.fillStyle = sk.screenText; p.g.font = '9px Helvetica, Arial, sans-serif'; p.g.globalAlpha = .75; p.g.fillText('POSITION', 7, 10); p.g.globalAlpha = 1; p.g.font = '17px Helvetica, Arial, sans-serif'; p.g.fillText(`${String(bar).padStart(3, '0')}.${bt}.${st}`, 7, 26); p.t.needsUpdate = true;
+  const loop = (beat % 8) / 8; L.seq.position.x = X(168 + loop * 794); L.roll.position.x = X(1073 + loop * 884);
+  if (L.skin !== skinIndex) { L.skin = skinIndex; const k = L.key, g = k.g; fit2(k); g.fillStyle = sk.accent; g.fillRect(0, 0, k.w, k.h); g.fillStyle = sk.accentText; g.beginPath(); g.moveTo(18, 8); g.lineTo(33, 16); g.lineTo(18, 24); g.closePath(); g.fill(); k.t.needsUpdate = true; }
+}
+let liveBeat = 0, liveLevel = 0, liveLast = 0, liveFrame = 0;
 function runLive(now, dt, tempo) {
   const front = machines[REACH];
-  if (liveHost !== front) { liveHost = front; [...Object.values(layers), playKey].forEach(l => front.tilt.add(l.m)); front.tilt.add(headSeq, headRoll); }
   liveBeat += dt * tempo / 60;
   liveLevel *= Math.exp(-dt / .16);
-  const q = Math.floor(liveBeat * 4);
-  if (q !== liveLast) { liveLast = q; const s = q % 16; if (s === 0 || s === 10) liveLevel = 1; else if (s === 4 || s === 12) liveLevel = .85; else liveLevel = Math.max(liveLevel, .28); }
-  const loop = (liveBeat % 8) / 8;
-  headSeq.position.x = X(168 + loop * 794); headRoll.position.x = X(1073 + loop * 884);
-  const sk = LIVE.skins && LIVE.skins[SKINS[front.skin].key]; if (!sk) return;
-  glowWanted.set(sk.level1).lerp(new THREE.Color(sk.level2), .4).lerp(new THREE.Color(0xffffff), .28);
+  const qt = Math.floor(liveBeat * 4);
+  if (qt !== liveLast) { liveLast = qt; const s = qt % 16; if (s === 0 || s === 10) liveLevel = 1; else if (s === 4 || s === 12) liveLevel = .85; else liveLevel = Math.max(liveLevel, .28); }
+  if (!LIVE.skins) return;
+  const fk = LIVE.skins[SKINS[front.skin].key]; if (!fk) return;
+  glowWanted.set(fk.level1).lerp(new THREE.Color(fk.level2), .4).lerp(new THREE.Color(0xffffff), .28);
   glowMat.color.lerp(glowWanted, Math.min(1, dt * 3));
   glowMat.opacity = .58 + liveLevel * .08;
   LIVE.visual.step(dt, null, null, null, liveLevel, now / 1000);
-  const col = t => mixColour(sk.level1, sk.level2, t), fit = l => { l.g.setTransform(l.scale, 0, 0, l.scale, 0, 0); };
-  const out = layers.out; fit(out); out.g.fillStyle = '#101113'; out.g.fillRect(0, 0, out.w, out.h); LIVE.visual.paint(out.g, out.w, out.h, Math.floor(liveBeat / 32) % 4, 3, col); out.t.needsUpdate = true;
-  const man = layers.man; fit(man); man.g.fillStyle = '#101113'; man.g.fillRect(0, 0, man.w, man.h); if (LIVE.dancer) paintDancer(man.g, man.w, man.h, LIVE.dancer, 7, liveBeat, sk.screenText); man.t.needsUpdate = true;
   const spec = new Float32Array(48); for (let i = 0; i < 48; i++) spec[i] = LIVE.visual.barAt(i / 47) * .92;
-  const card = '#17181b', pal = { clipper: sk.clipper, text: '#e1e1e4', edge: '#2b2c30', faint: '#a6a6ac', accent: sk.accent, accentText: sk.accentText };
-  const rl = layers.reso; fit(rl); rl.g.fillStyle = card; rl.g.fillRect(0, 0, rl.w, rl.h); stepState(LIVE.reso, 'resonance', resoP, dt, liveLevel, spec); paintEffect(rl.g, rl.w, rl.h, 'resonance', resoP, LIVE.reso, true, { ...pal, colour: sk.effects[1] }); rl.t.needsUpdate = true;
-  const cl = layers.clip; fit(cl); cl.g.fillStyle = card; cl.g.fillRect(0, 0, cl.w, cl.h); stepState(LIVE.clip, 'softClipper', softP, dt, liveLevel, null); paintEffect(cl.g, cl.w, cl.h, 'softClipper', softP, LIVE.clip, true, { ...pal, colour: sk.effects[0] }); cl.t.needsUpdate = true;
-  const p = layers.pos; fit(p); p.g.fillStyle = '#101113'; p.g.fillRect(0, 0, p.w, p.h);
-  const bar = Math.floor(liveBeat / 4) % 8 + 1, bt = Math.floor(liveBeat) % 4 + 1, st = Math.floor(liveBeat * 4) % 4 + 1;
-  p.g.fillStyle = sk.screenText; p.g.font = '9px Helvetica, Arial, sans-serif'; p.g.globalAlpha = .75; p.g.fillText('POSITION', 7, 10); p.g.globalAlpha = 1; p.g.font = '17px Helvetica, Arial, sans-serif'; p.g.fillText(`${String(bar).padStart(3, '0')}.${bt}.${st}`, 7, 26); p.t.needsUpdate = true;
-  if (playKey.lastSkin !== front.skin) { playKey.lastSkin = front.skin; const g = playKey.g; fit(playKey); g.fillStyle = sk.accent; g.fillRect(0, 0, playKey.w, playKey.h); g.fillStyle = sk.accentText; g.beginPath(); g.moveTo(18, 8); g.lineTo(33, 16); g.lineTo(18, 24); g.closePath(); g.fill(); playKey.t.needsUpdate = true; }
+  stepState(LIVE.reso, 'resonance', resoP, dt, liveLevel, spec);
+  stepState(LIVE.clip, 'softClipper', softP, dt, liveLevel, null);
+  liveFrame++;
+  machines.forEach((m, i) => {
+    const away = Math.abs(i - REACH), sk = LIVE.skins[SKINS[m.skin].key]; if (!sk || !m.group.visible) return;
+    if (away === 0 || m.live.skin !== m.skin) drawMachine(m, i, now, sk);
+    else if (away === 1 && !small && (liveFrame + i) % 4 === 0) drawMachine(m, i, now, sk);
+    else if (away === 1 && small && (liveFrame + i) % 12 === 0) drawMachine(m, i, now, sk);
+  });
 }
 
 // ---- Playing -------------------------------------------------------------------------------------------------------
