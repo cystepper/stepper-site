@@ -94,6 +94,11 @@ select{appearance:none;-webkit-appearance:none;border:0;background-color:#303034
 .phonebox{position:relative;overflow:hidden;background:#000;border-radius:24px;box-shadow:0 0 0 4px #000,0 0 0 5px #3a3a3c}
 .phonebox iframe{position:absolute;left:0;top:0;transform-origin:0 0;border:0;background:#000}
 #ptall{width:100%;aspect-ratio:393/852}#pwide{width:100%;aspect-ratio:852/393}
+@keyframes phonefloat{0%,100%{transform:translateY(0) rotate(-.7deg)}50%{transform:translateY(-9px) rotate(.7deg)}}
+.phonebox{animation:phonefloat 6.5s ease-in-out infinite;transition:opacity .28s ease;will-change:transform}
+#pwide{animation-delay:-3.2s}
+.phonebox.swap{opacity:.12}
+@media (prefers-reduced-motion:reduce){.phonebox{animation:none}}
 .bar{position:absolute;left:0;right:0;top:0;height:6.92%;background:#000;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:1% 11% 0;font-size:9px;font-weight:700;pointer-events:none}
 
 .story{max-width:720px;margin:0 auto;text-align:center}

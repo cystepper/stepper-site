@@ -702,6 +702,14 @@ document.addEventListener('touchcancel', touchEnded, { passive: true });
 document.addEventListener('contextmenu', event => event.preventDefault());
 document.addEventListener('mouseup', () => { if (mouseHeld >= 0) { setHeld(mouseHeld, false); mouseHeld = -1; } });
 
+// On the web site the page can be shown playing by itself.
+window.demoKey = (index, down) => {
+  if (!pianoLayout) return;
+  const key = pianoLayout.keys[index % pianoLayout.keys.length];
+  if (down) keyTouches.set('demo' + index, key); else keyTouches.delete('demo' + index);
+  drawPiano();
+};
+
 let lastTouch = 0;
 document.addEventListener('touchstart', () => { lastTouch = Date.now(); }, { passive: true, capture: true });
 document.addEventListener('mousedown', event => { if (Date.now() - lastTouch < 800) event.stopPropagation(); }, true);

@@ -21,7 +21,7 @@
     send(t) { if (t.startsWith('hello')) look(); else if (t !== 'p') { if (t[0] === 'g') page = +t.slice(1); parent.postMessage({ stepper: t }, '*'); } }
     close() {}
   };
-  addEventListener('message', e => { const m = e.data || {}; if (m.skin) { skin = m.skin; look(); } if (m.anim !== undefined) { anim = m.anim; state(); } if (m.hit !== undefined) say('h' + m.hit); });
+  addEventListener('message', e => { const m = e.data || {}; if (m.skin) { skin = m.skin; look(); } if (m.anim !== undefined) { anim = m.anim; state(); } if (m.hit !== undefined) say('h' + m.hit); if (m.key !== undefined && window.demoKey) window.demoKey(m.key, m.down); });
   // The wheel over these pads moves the page they sit in, and nothing stops on the way.
   addEventListener('wheel', e => { e.preventDefault(); parent.scrollBy({ top: e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY, behavior: 'instant' }); }, { passive: false });
   const short = 393, long = 852;

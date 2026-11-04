@@ -128,6 +128,27 @@ function fitFrames() {
 }
 addEventListener('resize', fitFrames); fitFrames();
 
+// The two phones go through the skins by themselves, and the piano plays a little.
+const PHONE_SKINS = ['3d_camouflage', '3d_petrol', '3d_kawaii', '3d_graphit', '3d_steel', '3d_clear'];
+let phoneSkin = 0;
+setInterval(() => {
+  if (still || !onScreen($('ptall'))) return;
+  phoneSkin = (phoneSkin + 1) % PHONE_SKINS.length;
+  const boxes = [$('ptall'), $('pwide')];
+  boxes.forEach(b => b.classList.add('swap'));
+  setTimeout(() => { [$('ftall'), $('fwide')].forEach(f => f.contentWindow && f.contentWindow.postMessage({ skin: PHONE_SKINS[phoneSkin] }, '*')); }, 280);
+  setTimeout(() => boxes.forEach(b => b.classList.remove('swap')), 620);
+}, 4800);
+const TUNE = [0, 2, 3, 5, 9, 5, 3, 2, 7, 9, 10, 12, 9, 7, 5, 3];
+let tuneAt = 0, tuneDown = -1;
+setInterval(() => {
+  if (still || !onScreen($('pwide'))) return;
+  const w = $('fwide').contentWindow; if (!w) return;
+  if (tuneDown >= 0) w.postMessage({ key: tuneDown, down: false }, '*');
+  tuneDown = TUNE[tuneAt++ % TUNE.length];
+  w.postMessage({ key: tuneDown, down: true }, '*');
+}, 300);
+
 // ---- Sequencer and piano roll: tracks that live in the roll are left alone in the grid --------------------------------------------
 const NAMES = ['Kick','FX','Perc','808','Snare','Vox','Rim','Snare 2','Closed Hat','FX 2','Open Hat','Crash','Chop','Vox 2','Vox 3','Perc 2'];
 const STEPS = 32;
