@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script src="fake.js"></script>
+<meta charset="utf-8">
+<title>CYSTEPPER</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="CYSTEPPER">
+<link rel="apple-touch-icon" href="/icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<style>
+html,body{margin:0;padding:0;position:fixed;inset:0;overflow:hidden;background:#141414;overscroll-behavior:none;touch-action:none;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}
+#sheet{position:absolute;left:0;top:0;width:100%;height:100%;background-size:100% 100%;background-repeat:no-repeat}
+.tab,.pad{position:absolute;touch-action:none}
+.tab{display:flex;align-items:center;justify-content:center;font:13px Helvetica,Arial,sans-serif;background-repeat:no-repeat;padding-bottom:2px;box-sizing:border-box}
+.tab i{position:absolute;inset:0;pointer-events:none;opacity:0}
+.pad canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#piano{position:absolute;left:0;top:0;display:none;background-size:100% 100%;background-repeat:no-repeat;touch-action:none}
+#piano canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.oct,.octLabel{position:absolute;display:flex;align-items:center;justify-content:center;font:13px Helvetica,Arial,sans-serif;touch-action:none;box-sizing:border-box;padding:0 8px 2px;white-space:nowrap;overflow:hidden}
+.oct.off{opacity:.45}
+#status{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 18px);transform:translateX(-50%);padding:9px 16px;background:rgba(0,0,0,.82);color:#fff;
+  font:13px Helvetica,Arial,sans-serif;letter-spacing:.02em;white-space:nowrap;border-radius:3px;display:none;pointer-events:none}
+#probe{position:fixed;visibility:hidden;pointer-events:none;top:0;height:0;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+</style>
+</head>
+<body>
+<div id="sheet"></div>
+<div id="piano"></div>
+<div id="status">CONNECTING</div>
+<div id="probe"></div>
+<script>
+'use strict';
+const PADS_PER_PAGE = 16, PAGES = 6, PAD_COUNT = PADS_PER_PAGE * PAGES;
+const PIXEL_SECONDS = 1.3, MAX_LIGHTS = 8;
+const ANIMATIONS = ['orbit', 'ripple', 'sparks', 'meter', 'dither', 'scan'];
+const sheetEl = document.getElementById('sheet'), statusEl = document.getElementById('status'), pianoEl = document.getElementById('piano'), probeEl = document.getElementById('probe');
+
+const pads = [];
+for (let i = 0; i < PAD_COUNT; i++) pads.push({ name: '', lights: [], muted: false, flash: 0, pulse: 0, age: 10, hits: 0, held: false, struck: -1000 });
+
+let look = null, layout = null, upImage = null, downImage = null, page = 0, animation = 5;
+let cells = [], tabs = [], socket = null, lastHeard = 0, helloSent = '', running = false, lastFrame = 0;
+const touches = new Map();
+let mouseHeld = -1, wasPortrait = true;
+
+// ---- Colours ----------------------------------------------------------------------------------------------
+const rgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const css = (c, alpha = 1) => `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${alpha})`;
+const linear = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+const luminance = c => 0.2126 * linear(c[0]) + 0.7152 * linear(c[1]) + 0.0722 * linear(c[2]);
+const textOnFill = c => luminance(c) > 0.18 ? [0, 0, 0] : [255, 255, 255];
+
+let colours = null;
+function readColours() {
+  colours = { panel: rgb(look.panel), text: rgb(look.text), textFaint: rgb(look.textFaint), level1: rgb(look.level1), level2: rgb(look.level2) };
+}
+
+// ---- The pixels on a struck pad, as the app draws them --------------------------------------------------------
+const chance = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
+const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+
+function paintPixels(g, x0, y0, w, h, lights, style, age, hits) {
+  const PIXEL = 2, CELL = PIXEL + 1, LEVELS = 4;
+  const across = Math.floor(w / CELL), down = Math.max(1, Math.floor(h / CELL)), count = Math.min(MAX_LIGHTS, lights.length);
+  if (across < 4 || count === 0) return;
+  const lists = [];
+  for (let c = 0; c <= MAX_LIGHTS; c++) lists.push([[], [], [], []]);
+  const put = (x, y, colour, strength) => {
+    if (strength <= 0.02 || x < 0 || y < 0 || x >= across || y >= down) return;
+    const level = Math.max(0, Math.min(LEVELS - 1, Math.floor(strength * LEVELS)));
+    lists[colour][level].push(x, y);
+  };
+  const fade = Math.exp(-age * 3.2);
+  switch (ANIMATIONS[style]) {
+    case 'orbit': {
+      const place = (along, inset) => {
+        along = ((along % 4) + 4) % 4;
+        const part = along - Math.floor(along), right = across - 1 - inset, bottom = down - 1 - inset;
+        const xa = inset + Math.round(part * (right - inset)), ya = inset + Math.round(part * (bottom - inset));
+        if (along < 1) return [xa, inset];
+        if (along < 2) return [right, ya];
+        if (along < 3) return [right + inset - xa, bottom];
+        return [inset, bottom + inset - ya];
+      };
+      const TAIL = 70, strength = Math.min(1, fade * 2.4);
+      for (let c = 0; c < count; c++) {
+        const head = age * 4.8 + c * 4 / count;
+        for (let part = 0; part < TAIL; part++) {
+          const along = head - part * 0.018, value = (1 - part / TAIL) * strength;
+          for (let inset = 0; inset < 2; inset++) { const at = place(along, inset); put(at[0], at[1], c, value); }
+        }
+      }
+      break;
+    }
+    case 'ripple': {
+      const mx = (across - 1) * 0.5, my = (down - 1) * 0.5;
+      for (let c = 0; c < count; c++) {
+        const radius = (age - c * 0.09) * across * 1.5;
+        if (radius < 0) continue;
+        const strength = Math.max(0, 1 - radius / (across * 0.72));
+        for (let y = 0; y < down; y++) for (let x = 0; x < across; x++) {
+          const apart = Math.abs(Math.hypot(x - mx, y - my) - radius);
+          if (apart < 2.1) put(x, y, c, (1 - apart / 2.1) * strength);
+        }
+      }
+      break;
+    }
+    case 'sparks': {
+      const strength = Math.max(0, 1 - age / 1.05);
+      for (let s = 0; s < 26; s++) {
+        const sx = chance(s, hits) * across, rise = -(0.45 + chance(s + 9, hits) * 0.9) * down * 1.5, drift = (chance(s + 3, hits) - 0.5) * across * 0.8;
+        put(Math.floor(sx + drift * age), Math.floor(down * 0.92 + rise * age + down * 2 * age * age), s % count, strength);
+      }
+      break;
+    }
+    case 'meter': {
+      const COLUMNS = 7, width = Math.max(2, Math.floor(across / COLUMNS));
+      for (let col = 0; col < COLUMNS; col++) {
+        const height = Math.floor((0.28 + 0.72 * chance(col, hits)) * down * 0.75 * fade * fade);
+        for (let y = 0; y < height; y++) for (let x = 0; x < width - 1; x++)
+          put(col * width + x + 1, down - 1 - y, col % count, 0.35 + 0.6 * y / Math.max(1, height));
+        if (height > 1) for (let x = 0; x < width - 1; x++) put(col * width + x + 1, down - 2 - height, MAX_LIGHTS, 0.8 * fade);
+      }
+      break;
+    }
+    case 'dither': {
+      for (let y = 0; y < down; y++) {
+        const value = fade * (1 - 0.55 * y / down);
+        for (let x = 0; x < across; x++)
+          if (value * 16 > BAYER[y % 4][x % 4] + 1)
+            put(x, y, Math.max(0, Math.min(count - 1, Math.floor((x + y) / (across + down) * count))), 0.42 + 0.4 * fade);
+      }
+      break;
+    }
+    default: {
+      const TRAIL = 14;
+      for (let c = 0; c < count; c++) {
+        const line = (age - c * 0.1) * down * 1.9;
+        if (line < 0) continue;
+        const strength = Math.max(0, 1 - line / (down * 1.5));
+        for (let y = 0; y < down; y++) {
+          const behind = line - y;
+          if (behind < 0 || behind > TRAIL) continue;
+          for (let x = 0; x < across; x++) if (behind < 1.5 || (x + y) % 2 === 0) put(x, y, c, (1 - behind / TRAIL) * strength);
+        }
+      }
+    }
+  }
+  const ox = Math.round(x0), oy = Math.round(y0);
+  for (let c = 0; c <= MAX_LIGHTS; c++) {
+    const shade = c === MAX_LIGHTS ? '#ffffff' : (lights[c] || null);
+    if (shade === null) continue;
+    g.fillStyle = shade;
+    for (let level = 0; level < LEVELS; level++) {
+      const list = lists[c][level];
+      if (list.length === 0) continue;
+      g.globalAlpha = (level + 1) / LEVELS;
+      g.beginPath();
+      for (let i = 0; i < list.length; i += 2) g.rect(ox + list[i] * CELL + 0.5, oy + list[i + 1] * CELL + 0.5, PIXEL, PIXEL);
+      g.fill();
+    }
+  }
+  g.globalAlpha = 1;
+}
+
+// ---- Drawing one pad -------------------------------------------------------------------------------------------
+function roundedPath(g, x, y, w, h, r) {
+  g.beginPath();
+  if (r <= 0 || !g.roundRect) g.rect(x, y, w, h);
+  else g.roundRect(x, y, w, h, r);
+}
+
+function wrapped(g, name, width) {
+  const words = name.split(/\s+/).filter(Boolean);
+  if (words.length < 2) return [name];
+  let best = [words.join(' ')], bestWidest = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(' '), b = words.slice(i).join(' ');
+    const widest = Math.max(g.measureText(a).width, g.measureText(b).width);
+    if (widest < bestWidest) { bestWidest = widest; best = [a, b]; }
+  }
+  return g.measureText(best.join(' ')).width <= width ? [best.join(' ')] : best;
+}
+
+function drawName(g, name, x, y, width, colour) {
+  g.font = '13px Helvetica, Arial, sans-serif';
+  g.textBaseline = 'top';
+  g.fillStyle = colour;
+  const lines = wrapped(g, name.toUpperCase(), width);
+  lines.forEach((line, i) => {
+    let text = line, w = g.measureText(text).width;
+    while (w * 0.6 > width && text.length > 1) { text = text.slice(0, -1); w = g.measureText(text + '…').width; if (w * 0.6 <= width) text += '…'; }
+    const squeeze = Math.min(1, width / w);
+    g.save();
+    g.translate(x, y + i * 16);
+    g.scale(squeeze, 1);
+    g.fillText(text, 0, 0);
+    g.restore();
+  });
+}
+
+function drawCell(cell) {
+  const index = page * PADS_PER_PAGE + cell.place, pad = pads[index], g = cell.g, w = cell.w, h = cell.h;
+  g.setTransform(cell.scale, 0, 0, cell.scale, 0, 0);
+  g.clearRect(0, 0, w, h);
+
+  if (pad.held && downImage) {
+    const s = downImage.naturalWidth / layout.width;
+    g.drawImage(downImage, cell.x * s, cell.y * s, w * s, h * s, 0, 0, w, h);
+  }
+
+  const empty = pad.name === '';
+  const glow = empty ? 0 : pad.flash;
+  const glowColour = mix(colours.level1, colours.level2, cell.place / (PADS_PER_PAGE - 1));
+  const surface = mix(colours.panel, glowColour, glow * 0.8);
+
+  if (glow > 0.01) {
+    if (look.lit) {
+      roundedPath(g, 3, 3, w - 6, h - 6, 4);
+      g.fillStyle = css(surface, glow * 0.55);
+      g.fill();
+      roundedPath(g, 1.5, 1.5, w - 3, h - 3, 3.5);
+      g.lineWidth = 1.4;
+      g.strokeStyle = css(glowColour, glow);
+      g.stroke();
+    } else {
+      g.fillStyle = css(glowColour, glow * 0.8);
+      g.fillRect(0, 0, w, h);
+    }
+  }
+
+  if (pad.lights.length > 0 && !empty && pad.age < PIXEL_SECONDS) {
+    const inset = look.lit ? 3 : 0;
+    g.save();
+    roundedPath(g, inset, inset, w - inset * 2, h - inset * 2, look.lit ? 4 : 0);
+    g.clip();
+    paintPixels(g, inset, inset, w - inset * 2, h - inset * 2, pad.lights, animation, pad.age, pad.hits);
+    g.restore();
+  }
+
+  if (!empty) {
+    const lit = glow > 0.08, bright = lit ? 1 : pad.pulse * 0.8, writing = lit ? textOnFill(surface) : colours.text;
+    const colour = mix(pad.muted ? colours.textFaint : colours.text, writing, bright);
+    const inner = Math.max(9, w * 0.075);
+    drawName(g, pad.name, inner, inner, w - inner * 2, css(colour));
+  }
+}
+
+function drawAll() { cells.forEach(drawCell); }
+
+// ---- What moves ------------------------------------------------------------------------------------------------
+function strike(index, own) {
+  const pad = pads[index], now = performance.now();
+  if (!own && now - pad.struck < 150) return;
+  if (own) pad.struck = now;
+  pad.flash = pad.pulse = 1;
+  pad.age = 0;
+  pad.hits++;
+  wake();
+}
+
+function wake() {
+  if (running) return;
+  running = true;
+  lastFrame = performance.now();
+  requestAnimationFrame(frame);
+}
+
+function frame(now) {
+  const dt = Math.min(0.1, (now - lastFrame) / 1000);
+  lastFrame = now;
+  const pulseDecay = Math.exp(-dt / 0.2), flashDecay = Math.exp(-dt / 0.18);
+  let moving = false;
+  const energy = new Array(PAGES).fill(0);
+
+  for (let i = 0; i < PAD_COUNT; i++) {
+    const pad = pads[i], before = pad.flash > 0 || pad.pulse > 0 || (pad.age < PIXEL_SECONDS && pad.lights.length > 0);
+    pad.age = Math.min(PIXEL_SECONDS + 1, pad.age + dt);
+    pad.pulse = pad.pulse < 0.004 ? 0 : pad.pulse * pulseDecay;
+    pad.flash = pad.flash < 0.004 ? 0 : pad.flash * flashDecay;
+    const p = Math.floor(i / PADS_PER_PAGE);
+    energy[p] = Math.max(energy[p], pad.pulse);
+    if (before) {
+      moving = true;
+      if (p === page && cells[i - p * PADS_PER_PAGE]) drawCell(cells[i - p * PADS_PER_PAGE]);
+    }
+  }
+
+  tabs.forEach((tab, p) => { tab.glow.style.opacity = p === page ? 0 : (energy[p] * 0.3).toFixed(3); });
+
+  if (moving) requestAnimationFrame(frame);
+  else running = false;
+}
+
+// ---- Connection ------------------------------------------------------------------------------------------------
+function send(text) { if (socket && socket.readyState === 1) socket.send(text); }
+
+function releaseAll() {
+  touches.forEach(index => setHeld(index, false));
+  touches.clear();
+  if (mouseHeld >= 0) { setHeld(mouseHeld, false); mouseHeld = -1; }
+  releaseKeys();
+}
+
+function showStatus(text) {
+  statusEl.textContent = text;
+  statusEl.style.display = text ? 'block' : 'none';
+}
+
+function windowSize() {
+  return { portrait: window.innerHeight >= window.innerWidth, w: Math.round(window.innerWidth), h: Math.round(window.innerHeight) };
+}
+
+function fitWindow() {
+  const size = windowSize(), root = document.documentElement;
+  root.style.width = document.body.style.width = sheetEl.style.width = size.w + 'px';
+  root.style.height = document.body.style.height = sheetEl.style.height = size.h + 'px';
+  pianoEl.style.width = size.w + 'px';
+  pianoEl.style.height = size.h + 'px';
+  sheetEl.style.display = size.portrait ? 'block' : 'none';
+  pianoEl.style.display = size.portrait ? 'none' : 'block';
+  if (size.portrait !== wasPortrait) { releaseAll(); wasPortrait = size.portrait; }
+  if (!size.portrait && pianoLayout) drawPiano();
+  return size;
+}
+
+function sayHello() {
+  const size = fitWindow();
+  if (!socket || socket.readyState !== 1) return;
+  // The pictures for both ways of holding it come from one hello, always told as if upright.
+  if (!size.portrait && helloSent !== '') return;
+  const style = getComputedStyle(probeEl), inset = name => Math.round(parseFloat(style[name]) || 0);
+  const scale = Math.min(3, Math.max(1, Math.ceil(window.devicePixelRatio || 1)));
+  const short = Math.min(screen.width, screen.height), long = Math.max(screen.width, screen.height);
+  const upright = size.portrait ? [size.w, size.h, inset('paddingTop'), inset('paddingBottom')] : [short, long, 0, inset('paddingBottom')];
+  // On its side the screen is free from end to end, with the notch at one of them if the phone has one.
+  const side = size.portrait ? (long >= 812 ? 59 : 0) : Math.max(inset('paddingLeft'), inset('paddingRight'));
+  const hello = ['hello', Math.min(1400, upright[0]), Math.min(2000, upright[1]), upright[2], upright[3], scale, side, Math.min(2000, long), Math.min(1400, short)].join(' ');
+  if (hello !== helloSent) { helloSent = hello; send(hello); }
+}
+
+function connect() {
+  if (socket) return;
+  const ws = new WebSocket('ws://' + location.host + '/ws');
+  socket = ws;
+  ws.onopen = () => { lastHeard = performance.now(); helloSent = ''; sayHello(); };
+  ws.onmessage = event => {
+    lastHeard = performance.now();
+    const text = event.data, kind = text[0];
+    if (kind === 'h') strike(parseInt(text.slice(1), 10), false);
+    else if (kind === 'p') send('p');
+    else if (kind === '{') received(JSON.parse(text));
+  };
+  const lost = () => {
+    if (socket !== ws) return;
+    socket = null;
+    releaseAll();
+    showStatus('RECONNECTING');
+    setTimeout(connect, 1000);
+  };
+  ws.onclose = lost;
+  ws.onerror = () => { try { ws.close(); } catch (e) {} };
+}
+
+// A socket a sleeping phone or a lost cable has left behind never says that it is gone.
+setInterval(() => {
+  if (socket && socket.readyState === 1 && performance.now() - lastHeard > 5000) {
+    const old = socket;
+    socket = null;
+    try { old.close(); } catch (e) {}
+    releaseAll();
+    showStatus('RECONNECTING');
+    connect();
+  }
+}, 1000);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { releaseAll(); return; }
+  if (!socket) connect();
+  else { helloSent = ''; sayHello(); }
+});
+window.addEventListener('pagehide', releaseAll);
+window.addEventListener('resize', () => { fitWindow(); setTimeout(sayHello, 120); });
+window.addEventListener('orientationchange', () => setTimeout(sayHello, 300));
+
+async function loadImage(url) {
+  const image = new Image();
+  image.src = url;
+  await image.decode();
+  return image;
+}
+
+function received(message) {
+  if (message.t === 'look') applyLook(message);
+  else if (message.t === 'state') applyState(message);
+}
+
+let lookNumber = 0;
+async function applyLook(message) {
+  const number = ++lookNumber;
+  let up, down;
+  try { [up, down] = await Promise.all([loadImage(message.up), loadImage(message.down), loadImage(message.piano)]); }
+  catch (e) { return; }
+  if (number !== lookNumber) return;
+  look = message.skin;
+  layout = message.layout;
+  upImage = up;
+  downImage = down;
+  readColours();
+  document.documentElement.style.background = document.body.style.background = look.background;
+  sheetEl.style.backgroundImage = `url(${message.up})`;
+  build();
+  buildPiano(message);
+  fitWindow();
+  showStatus('');
+}
+
+function applyState(message) {
+  const pageBefore = page;
+  page = message.page;
+  animation = message.anim;
+  if (message.target !== target) { target = message.target; paintOctaveLabel(); }
+  message.names.forEach((name, i) => { pads[i].name = name; });
+  message.lights.forEach((list, i) => { pads[i].lights = list; });
+  pads.forEach((pad, i) => { pad.muted = message.muted.indexOf(i) >= 0; });
+  if (look) { if (pageBefore !== page) paintTabs(); drawAll(); }
+}
+
+// ---- The phone on its side: two octaves, which play the pad of the piano roll ------------------------------------
+let pianoLayout = null, pianoImage = '', pianoG = null, pianoCanvas = null, target = '', labelEl = null, downEl = null, upEl = null;
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const LOWEST_OCTAVE = 1, HIGHEST_OCTAVE = 5;   // As far as the piano roll goes: C1 to C7.
+const keyTouches = new Map();
+let mouseKey = null, octave = 3, pianoSource = null;
+try { const kept = parseInt(localStorage.getItem('octave'), 10); if (kept >= LOWEST_OCTAVE && kept <= HIGHEST_OCTAVE) octave = kept; } catch (e) {}
+
+const midiOf = key => (octave + 1) * 12 + key.n;
+
+function keyHolders(key) {
+  let count = mouseKey === key ? 1 : 0;
+  keyTouches.forEach(held => { if (held === key) count++; });
+  return count;
+}
+
+function pressKey(key) {
+  if (keyHolders(key) > 0) return;
+  key.midi = midiOf(key);
+  send('k' + key.midi);
+}
+
+function liftKey(key) {
+  if (keyHolders(key) === 0) send('l' + key.midi);
+}
+
+function releaseKeys() {
+  const held = new Set(keyTouches.values());
+  if (mouseKey) held.add(mouseKey);
+  keyTouches.clear();
+  mouseKey = null;
+  held.forEach(liftKey);
+  if (pianoG) drawPiano();
+}
+
+function pianoScale() {
+  return { x: pianoEl.clientWidth / pianoLayout.width, y: pianoEl.clientHeight / pianoLayout.height };
+}
+
+function keyAt(clientX, clientY) {
+  const scale = pianoScale(), x = clientX / scale.x, y = clientY / scale.y;
+  const inside = key => x >= key.r[0] && x < key.r[0] + key.r[2] && y >= key.r[1] && y < key.r[1] + key.r[3];
+  // The blacks lie on top. The small gaps between the keys belong to the key on their left.
+  const black = pianoLayout.keys.find(key => key.b && inside(key));
+  if (black) return black;
+  const top = pianoLayout.keys[0].r[1];
+  if (y < top) return null;
+  return pianoLayout.keys.find(key => !key.b && x >= key.r[0] && x < key.r[0] + key.r[2] + 2 && y < key.r[1] + key.r[3] + 40) || null;
+}
+
+// A pressed key lights up in the skin's colours of light, as a struck pad does.
+const keyLight = key => mix(colours.level1, colours.level2, key.n / 24);
+
+function drawPiano() {
+  if (!pianoG || !pianoSource.complete || pianoEl.clientWidth === 0) return;
+  const scale = Math.min(3, Math.max(1, window.devicePixelRatio || 1)), size = pianoScale(), g = pianoG;
+  const wide = Math.round(pianoEl.clientWidth * scale), tall = Math.round(pianoEl.clientHeight * scale);
+  if (pianoCanvas.width !== wide || pianoCanvas.height !== tall) { pianoCanvas.width = wide; pianoCanvas.height = tall; }
+  g.setTransform(scale * size.x, 0, 0, scale * size.y, 0, 0);
+  g.clearRect(0, 0, pianoLayout.width, pianoLayout.height);
+  const pressed = key => keyHolders(key) > 0;
+  const s = pianoSource.naturalWidth / pianoLayout.width;
+
+  pianoLayout.keys.forEach(key => {
+    if (key.b || !pressed(key)) return;
+    g.fillStyle = css(keyLight(key));
+    g.fillRect(key.r[0] + 1, key.r[1] + 1, key.r[2] - 2, key.r[3] - 4);
+  });
+
+  pianoLayout.keys.forEach(key => {
+    if (key.b) g.drawImage(pianoSource, key.r[0] * s, key.r[1] * s, key.r[2] * s, key.r[3] * s, key.r[0], key.r[1], key.r[2], key.r[3]);
+  });
+
+  pianoLayout.keys.forEach(key => {
+    if (!key.b || !pressed(key)) return;
+    g.fillStyle = css(keyLight(key));
+    g.fillRect(key.r[0] + 1, key.r[1] + 1, key.r[2] - 2, key.r[3] - 4);
+  });
+
+  // The Cs carry their names, as in the piano roll.
+  g.font = '11px Helvetica, Arial, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'bottom';
+  pianoLayout.keys.forEach(key => {
+    if (key.b || key.n % 12 !== 0) return;
+    g.fillStyle = pressed(key) ? css(textOnFill(keyLight(key))) : '#000000';
+    g.globalAlpha = pressed(key) ? 1 : 0.62;
+    g.fillText('C' + (octave + key.n / 12), key.r[0] + key.r[2] / 2, key.r[1] + key.r[3] - 8);
+    g.globalAlpha = 1;
+  });
+  g.textAlign = 'left';
+}
+
+function paintOctaveLabel() {
+  if (!labelEl) return;
+  labelEl.textContent = target === '' ? 'NO SOUND ON THIS PAD' : target.toUpperCase();
+  downEl.classList.toggle('off', octave <= LOWEST_OCTAVE);
+  upEl.classList.toggle('off', octave >= HIGHEST_OCTAVE);
+}
+
+function moveOctave(by) {
+  const next = Math.max(LOWEST_OCTAVE, Math.min(HIGHEST_OCTAVE, octave + by));
+  if (next === octave) return;
+  octave = next;
+  try { localStorage.setItem('octave', String(octave)); } catch (e) {}
+  paintOctaveLabel();
+  drawPiano();
+}
+
+function buildPiano(message) {
+  pianoLayout = message.pianoLayout;
+  pianoSource = new Image();
+  pianoSource.src = message.piano;
+  pianoEl.innerHTML = '';
+  pianoEl.style.backgroundImage = `url(${message.piano})`;
+  pianoCanvas = document.createElement('canvas');
+  pianoEl.appendChild(pianoCanvas);
+  pianoG = pianoCanvas.getContext('2d');
+
+  const place = (el, r) => { el.style.left = (100 * r[0] / pianoLayout.width) + '%'; el.style.top = (100 * r[1] / pianoLayout.height) + '%'; el.style.width = (100 * r[2] / pianoLayout.width) + '%'; el.style.height = (100 * r[3] / pianoLayout.height) + '%'; };
+  const button = (text, r, by) => {
+    const el = document.createElement('div');
+    el.className = 'oct';
+    el.textContent = text;
+    el.style.color = look.controlText;
+    place(el, r);
+    const go = event => { event.preventDefault(); event.stopPropagation(); moveOctave(by); };
+    el.addEventListener('touchstart', go, { passive: false });
+    el.addEventListener('mousedown', go);
+    pianoEl.appendChild(el);
+    return el;
+  };
+  downEl = button('OCT \u2212', pianoLayout.down, -1);
+  upEl = button('OCT +', pianoLayout.up, 1);
+  labelEl = document.createElement('div');
+  labelEl.className = 'octLabel';
+  labelEl.style.color = look.text;
+  place(labelEl, pianoLayout.label);
+  pianoEl.appendChild(labelEl);
+  paintOctaveLabel();
+  pianoSource.onload = drawPiano;
+}
+
+pianoEl.addEventListener('touchstart', event => {
+  event.preventDefault();
+  for (const touch of event.changedTouches) {
+    const key = keyAt(touch.clientX, touch.clientY);
+    if (!key) continue;
+    pressKey(key);
+    keyTouches.set(touch.identifier, key);
+  }
+  drawPiano();
+}, { passive: false });
+
+// A finger may slide along the keys.
+pianoEl.addEventListener('touchmove', event => {
+  event.preventDefault();
+  let changed = false;
+  for (const touch of event.changedTouches) {
+    if (!keyTouches.has(touch.identifier)) continue;
+    const before = keyTouches.get(touch.identifier), now = keyAt(touch.clientX, touch.clientY);
+    if (now === before || !now) continue;
+    pressKey(now);
+    keyTouches.set(touch.identifier, now);
+    liftKey(before);
+    changed = true;
+  }
+  if (changed) drawPiano();
+}, { passive: false });
+
+const pianoTouchEnded = event => {
+  event.preventDefault();
+  for (const touch of event.changedTouches) {
+    const key = keyTouches.get(touch.identifier);
+    if (!key) continue;
+    keyTouches.delete(touch.identifier);
+    liftKey(key);
+  }
+  drawPiano();
+};
+pianoEl.addEventListener('touchend', pianoTouchEnded, { passive: false });
+pianoEl.addEventListener('touchcancel', pianoTouchEnded, { passive: false });
+pianoEl.addEventListener('mousedown', event => {
+  event.preventDefault();
+  const key = keyAt(event.clientX, event.clientY);
+  if (!key) return;
+  pressKey(key);
+  mouseKey = key;
+  drawPiano();
+});
+document.addEventListener('mouseup', () => { if (mouseKey) { const key = mouseKey; mouseKey = null; liftKey(key); drawPiano(); } });
+
+// ---- The surface -----------------------------------------------------------------------------------------------
+function build() {
+  releaseAll();       // A touch on a pad that is replaced would never report its end.
+  sheetEl.querySelectorAll('.tab,.pad').forEach(e => e.remove());
+  const scale = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+
+  tabs = layout.tabs.map((r, p) => {
+    const el = document.createElement('div');
+    el.className = 'tab';
+    el.style.cssText = `left:${r[0]}px;top:${r[1]}px;width:${r[2]}px;height:${r[3]}px`;
+    el.textContent = p + 1;
+    const glow = document.createElement('i');
+    glow.style.background = look.controlText;
+    el.appendChild(glow);
+    const choose = event => { event.preventDefault(); if (p !== page) { page = p; paintTabs(); drawAll(); send('g' + p); } };
+    el.addEventListener('touchstart', choose, { passive: false });
+    el.addEventListener('mousedown', choose);
+    sheetEl.appendChild(el);
+    return { el, glow, r };
+  });
+
+  cells = layout.cells.map((r, place) => {
+    const el = document.createElement('div');
+    el.className = 'pad';
+    el.style.cssText = `left:${r[0]}px;top:${r[1]}px;width:${r[2]}px;height:${r[3]}px`;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(r[2] * scale);
+    canvas.height = Math.round(r[3] * scale);
+    el.appendChild(canvas);
+    sheetEl.appendChild(el);
+    el.addEventListener('touchstart', event => {
+      event.preventDefault();
+      for (const touch of event.changedTouches) {
+        const index = page * PADS_PER_PAGE + place;
+        touches.set(touch.identifier, index);
+        setHeld(index, true);
+      }
+    }, { passive: false });
+    el.addEventListener('mousedown', event => {
+      event.preventDefault();
+      mouseHeld = page * PADS_PER_PAGE + place;
+      setHeld(mouseHeld, true);
+    });
+    return { place, el, x: r[0], y: r[1], w: r[2], h: r[3], scale, g: canvas.getContext('2d') };
+  });
+
+  paintTabs();
+  drawAll();
+}
+
+function paintTabs() {
+  tabs.forEach((tab, p) => {
+    const on = p === page;
+    tab.el.style.color = on ? look.accentText : look.controlText;
+    tab.el.style.backgroundImage = on ? `url(${downImage.src})` : 'none';
+    tab.el.style.backgroundSize = `${layout.width}px ${layout.height}px`;
+    tab.el.style.backgroundPosition = `${-tab.r[0]}px ${-tab.r[1]}px`;
+  });
+}
+
+function setHeld(index, down) {
+  const pad = pads[index];
+  pad.held = down;
+  send((down ? 'd' : 'u') + index);
+  if (down) strike(index, true);
+  if (Math.floor(index / PADS_PER_PAGE) === page && cells[index % PADS_PER_PAGE]) drawCell(cells[index % PADS_PER_PAGE]);
+}
+
+function touchEnded(event) {
+  event.preventDefault();
+  for (const touch of event.changedTouches) {
+    const index = touches.get(touch.identifier);
+    if (index === undefined) continue;
+    touches.delete(touch.identifier);
+    let stillHeld = false;
+    touches.forEach(other => { stillHeld = stillHeld || other === index; });
+    if (!stillHeld) setHeld(index, false);
+  }
+}
+
+document.addEventListener('touchend', touchEnded, { passive: false });
+document.addEventListener('touchcancel', touchEnded, { passive: false });
+document.addEventListener('touchmove', event => event.preventDefault(), { passive: false });
+document.addEventListener('gesturestart', event => event.preventDefault());
+document.addEventListener('contextmenu', event => event.preventDefault());
+document.addEventListener('mouseup', () => { if (mouseHeld >= 0) { setHeld(mouseHeld, false); mouseHeld = -1; } });
+
+showStatus('CONNECTING');
+connect();
+</script>
+</body>
+</html>
