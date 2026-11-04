@@ -23,14 +23,14 @@ p{margin:0;font-size:clamp(17px,1.4vw,20px);line-height:1.45;color:var(--w)}
 img{display:block;width:100%;height:auto}
 button{font-family:inherit}
 
-#hero{position:relative;height:min(100svh,calc(50vw + 280px));min-height:468px;overflow:hidden;background:#000}
+#hero{position:relative;height:min(100svh,calc(50vw + 310px));min-height:498px;overflow:hidden;background:#000}
 #hero::after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 90% at 50% 45%,transparent 58%,rgba(0,0,0,.62) 100%);z-index:1}
 #c{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab;opacity:0;transition:opacity 1.4s ease}
 #c.on{opacity:1}#c.drag{cursor:grabbing}
-#brand{position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + clamp(28px,4.6vh,48px));z-index:2;display:flex;justify-content:center;align-items:center;gap:clamp(7px,.9vw,13px);pointer-events:none}
+#brand{position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + clamp(48px,8vh,84px));z-index:2;display:flex;justify-content:center;align-items:center;gap:clamp(7px,.9vw,13px);pointer-events:none}
 #spin,#word{display:block;image-rendering:pixelated;height:var(--lh);--lh:clamp(26px,3.3vw,44px)}
 #spin{aspect-ratio:var(--ar,1);background:url(logo/cy_spin.png) 0 0/auto 100% no-repeat}
-#tag{position:absolute;left:0;right:0;z-index:2;text-align:center;top:calc(env(safe-area-inset-top) + clamp(28px,4.6vh,48px) + clamp(26px,3.3vw,44px) + 7px);pointer-events:none;font-size:clamp(15px,1.35vw,19px);color:var(--w);padding:0 14px;line-height:1.28;text-shadow:0 0 10px #000,0 0 3px #000}
+#tag{position:absolute;left:0;right:0;z-index:2;text-align:center;top:calc(env(safe-area-inset-top) + clamp(48px,8vh,84px) + clamp(26px,3.3vw,44px) + 7px);pointer-events:none;font-size:clamp(15px,1.35vw,19px);color:var(--w);padding:0 14px;line-height:1.28;text-shadow:0 0 10px #000,0 0 3px #000}
 #tag b{font-weight:700}
 #pick{position:absolute;left:0;right:0;bottom:clamp(8px,1.8vh,20px);z-index:2;display:flex;align-items:center;justify-content:center;gap:clamp(12px,2vw,26px);pointer-events:none}
 #pick button{pointer-events:auto;width:40px;height:40px;border-radius:50%;border:1px solid #3a3a3c;background:rgba(28,28,30,.7);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);color:var(--w);font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 0 2px}
