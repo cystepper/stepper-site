@@ -232,14 +232,55 @@ function drawMan() {
 }
 loadBin('dancers').then(d => danceData = d);
 
+// ---- The price: the visualizer runs inside its letters, and only there -------------------------------------------------------------
+const priceHead = heads.find(o => o.h.closest('.price')), priceFill = document.createElement('canvas');
+priceFill.className = 'fill'; priceHead.h.appendChild(priceFill);
+const priceBars = new Visual(), priceG = priceFill.getContext('2d'), priceCol = t => mixColour('#7fe3cf', '#b9a8ff', t);
+function drawPrice() {
+  const h = priceHead.h;
+  if (priceHead.last !== 1) { h.classList.remove('live'); priceFill.style.display = 'none'; return; }
+  h.classList.add('live'); priceFill.style.display = 'block';
+  const dpr = Math.min(2, devicePixelRatio || 1), W = h.clientWidth, H = h.clientHeight, box = h.getBoundingClientRect();
+  if (priceFill.width !== Math.round(W * dpr) || priceFill.height !== Math.round(H * dpr)) { priceFill.width = Math.round(W * dpr); priceFill.height = Math.round(H * dpr); }
+  const g = priceG, st = getComputedStyle(h);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, W, H);
+  g.fillStyle = 'rgba(245,245,247,.62)'; g.fillRect(0, 0, W, H);
+  // The same blocks as the visualizer, reaching up through the whole height of the letters.
+  const t = performance.now() / 1000, bars = priceBars.bars;
+  for (let i = 0; i < bars.length; i++) {
+    const want = Math.min(1, (.3 + .62 * Math.abs(Math.sin(i * 1.7 + t * 3.1) * Math.sin(i * .61 - t * 1.9))) * (.62 + level * .75));
+    bars[i] = Math.max(want, bars[i] * .9);
+  }
+  priceBars.paint(g, W, H, 0, W < 500 ? 2 : 3, priceCol);
+  g.globalCompositeOperation = 'destination-in';
+  const layer = priceText(W, H, dpr, st, box);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.drawImage(layer, 0, 0);
+  g.globalCompositeOperation = 'source-over';
+}
+const textLayer = document.createElement('canvas');
+function priceText(W, H, dpr, st, box) {
+  if (textLayer.width !== Math.round(W * dpr) || textLayer.height !== Math.round(H * dpr) || textLayer.dataset.font !== st.fontSize) {
+    textLayer.width = Math.round(W * dpr); textLayer.height = Math.round(H * dpr); textLayer.dataset.font = st.fontSize;
+    const t = textLayer.getContext('2d');
+    t.setTransform(dpr, 0, 0, dpr, 0, 0); t.fillStyle = '#fff'; t.textBaseline = 'alphabetic'; t.font = `${st.fontWeight} ${st.fontSize} ${st.fontFamily}`;
+    if ('fontStretch' in t) t.fontStretch = 'expanded';
+    if ('letterSpacing' in t) t.letterSpacing = st.letterSpacing;
+    priceHead.spans.forEach(s => { const r = s.getBoundingClientRect(); t.fillText(s.textContent.toUpperCase(), r.left - box.left, r.top - box.top + r.height * .82); });
+  }
+  return textLayer;
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { textLayer.dataset.font = ''; });
+
 // ---- The one clock of all that moves --------------------------------------------------------------------------------------------
 let last = performance.now(), lastStep = -1;
 function loop(now) {
   requestAnimationFrame(loop);
   const dt = Math.min(.05, (now - last) / 1000); last = now;
   if (still) { if (lastStep < 0) { lastStep = 0; drawOutput(); drawMan(); } return; }
-  const seqSeen = onScreen($('daw')), padSeen = onScreen($('padframe')), outSeen = onScreen($('outp')), manSeen = onScreen(man);
-  if (!seqSeen && !padSeen && !outSeen && !manSeen && !onScreen($('ptall'))) return;
+  const seqSeen = onScreen($('daw')), padSeen = onScreen($('padframe')), outSeen = onScreen($('outp')), manSeen = onScreen(man), priceSeen = onScreen(priceHead.h);
+  if (!seqSeen && !padSeen && !outSeen && !manSeen && !priceSeen && !onScreen($('ptall'))) return;
   beat += dt * TEMPO / 60;
   const step = Math.floor(beat * 4) % STEPS;
   if (step !== lastStep) {
@@ -249,6 +290,7 @@ function loop(now) {
   }
   level *= Math.exp(-dt / .16);
   if (outSeen) { visual.step(dt, null, null, null, level, now / 1000); drawOutput(); }
+  if (priceSeen) drawPrice();
   if (manSeen) drawMan();
 }
 requestAnimationFrame(loop);
