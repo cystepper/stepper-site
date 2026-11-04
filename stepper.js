@@ -165,7 +165,7 @@ const glowCanvas = document.createElement('canvas'); glowCanvas.width = glowCanv
 { const g = glowCanvas.getContext('2d'), r = g.createRadialGradient(256, 256, 0, 256, 256, 256);
   r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(.38, 'rgba(255,255,255,.62)'); r.addColorStop(.7, 'rgba(255,255,255,.16)'); r.addColorStop(1, 'rgba(255,255,255,0)');
   g.fillStyle = r; g.fillRect(0, 0, 512, 512); }
-const glowMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(glowCanvas), color: 0x8a8a90, transparent: true, opacity: .27, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false });
+const glowMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(glowCanvas), color: 0x8a8a90, transparent: true, opacity: .46, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false });
 const glow = new THREE.Mesh(new THREE.PlaneGeometry(W * 3, D * 3.4).rotateX(-Math.PI / 2), glowMat);
 glow.position.set(0, FLOOR + .02, 1);
 glow.renderOrder = 3;
@@ -368,7 +368,7 @@ function runLive(now, dt, tempo) {
   const sk = LIVE.skins && LIVE.skins[SKINS[front.skin].key]; if (!sk) return;
   glowWanted.set(sk.level1).lerp(new THREE.Color(sk.level2), .4).lerp(new THREE.Color(0xffffff), .28);
   glowMat.color.lerp(glowWanted, Math.min(1, dt * 3));
-  glowMat.opacity = .27 + liveLevel * .05;
+  glowMat.opacity = .46 + liveLevel * .07;
   LIVE.visual.step(dt, null, null, null, liveLevel, now / 1000);
   const col = t => mixColour(sk.level1, sk.level2, t), fit = l => { l.g.setTransform(l.scale, 0, 0, l.scale, 0, 0); };
   const out = layers.out; fit(out); out.g.fillStyle = '#101113'; out.g.fillRect(0, 0, out.w, out.h); LIVE.visual.paint(out.g, out.w, out.h, Math.floor(liveBeat / 32) % 4, 3, col); out.t.needsUpdate = true;
