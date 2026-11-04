@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from './lib/RoundedBoxGeometry.js';
 import { mergeGeometries } from './lib/BufferGeometryUtils.js';
-import { EFFECTS, newState, stepState, paintEffect, Visual, loadBin, paintDancer, paintClip, CLIPS, mixColour } from './live.js';
+import { EFFECTS, newState, stepState, paintEffect, Visual, loadBin, paintDancer, paintClip, CLIPS, mixColour } from './live.js?v=3';
 
 const SKINS = [
  ['3d_camouflage','Camouflage',0x25261a,.35,.62],['3d_graphit','Graphite',0x1a1a1d,.65,.42],['3d_steel','Brushed Steel',0x8f908e,1,.36],['3d_clear','Transparent Tech',0xaab3ae,.2,.22],
@@ -165,7 +165,7 @@ const ledMat = new THREE.MeshStandardMaterial({ color: 0x33ff88, emissive: 0x33f
 
 // Only so many machines exist, and they take on whichever skins are in view as the ring turns.
 const FLOOR = -THICK - 1.0;
-const table = new THREE.Mesh(new THREE.CircleGeometry(150, 64).rotateX(-Math.PI / 2), new THREE.MeshPhysicalMaterial({ color: 0x050506, metalness: .55, roughness: .42, transparent: !small, opacity: small ? 1 : .86 }));
+const table = new THREE.Mesh(new THREE.CircleGeometry(150, 64).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x050506, metalness: 0, roughness: .9, envMapIntensity: 0, transparent: !small, opacity: small ? 1 : .86 }));
 table.position.y = FLOOR;
 table.receiveShadow = true;
 table.renderOrder = 2;
@@ -177,7 +177,7 @@ const glowCanvas = document.createElement('canvas'); glowCanvas.width = glowCanv
   g.fillStyle = r; g.fillRect(0, 0, 512, 512); }
 const glowMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(glowCanvas), color: 0x8a8a90, transparent: true, opacity: .58, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false });
 const glow = new THREE.Mesh(new THREE.PlaneGeometry(W * 3, D * 3.4).rotateX(-Math.PI / 2), glowMat);
-glow.position.set(0, FLOOR + .02, 1);
+glow.position.set(0, FLOOR + .1, 1);
 glow.renderOrder = 3;
 scene.add(glow);
 const glowWanted = new THREE.Color(0x8a8a90);
@@ -316,6 +316,7 @@ function fit() {
   camera.lookAt(0, -.3, -.3);
   camBase = camera.position.clone();
   camera.setViewOffset(w, h, 0, -(top - bottom) / 2, w, h);
+  camera.near = Math.max(3, dist * .35); camera.far = dist * 4;
   camera.updateProjectionMatrix();
   scene.fog.near = dist * 1.02;
   scene.fog.far = dist + radius * 1.15;

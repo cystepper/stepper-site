@@ -1,5 +1,5 @@
 // What moves on the page besides the machines at the top. It plays no sound.
-import { Visual, CLIPS, DANCES, loadBin, paintClip, paintDancer, mixColour, clamp } from './live.js';
+import { Visual, CLIPS, DANCES, loadBin, paintClip, paintDancer, mixColour, clamp } from './live.js?v=3';
 const $ = id => document.getElementById(id);
 const still = matchMedia('(prefers-reduced-motion:reduce)').matches;
 const onScreen = el => { const r = el.getBoundingClientRect(); return r.bottom > -40 && r.top < innerHeight + 40; };
