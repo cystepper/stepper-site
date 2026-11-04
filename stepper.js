@@ -33,7 +33,6 @@ const FRAME_W = 46;
 sprite.src = 'logo/cy_spin.png';
 
 // ---- Things appearing while scrolling ---------------------------------------------------------------------------
-document.getElementById('skins').addEventListener('click', e => { const f = e.target.closest('figure'); if (f) window.showSkin(+f.dataset.skin); });
 
 const still = matchMedia('(prefers-reduced-motion:reduce)').matches;
 
@@ -319,7 +318,6 @@ const release = () => {
 };
 addEventListener('pointerup', release);
 addEventListener('pointercancel', release);
-window.showSkin = index => { const now = mod(Math.round(target)); let by = index - now; if (by > COUNT / 2) by -= COUNT; if (by < -COUNT / 2) by += COUNT; target = Math.round(target) + by; lastTouched = performance.now(); scrollTo({ top: 0, behavior: 'smooth' }); };
 const go = by => { target = Math.round(target) + by; lastTouched = performance.now(); };
 document.getElementById('prev').onclick = () => go(-1);
 document.getElementById('next').onclick = () => go(1);

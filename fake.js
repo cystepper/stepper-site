@@ -2,7 +2,7 @@
 (function () {
   const q = new URLSearchParams(location.search);
   let skin = q.get('skin') || '3d_camouflage', form = q.get('form') || 'phone', page = 0, anim = 5, self = null;
-  const names = ['Kick','FX','','808','Snare','Vox','','Snare 2','Closed Hat','FX 2','Open Hat','Crash','Chop','Vox 2','Vox 3','Perc'];
+  const names = ['Kick','FX','Perc','808','Snare','Vox','Rim','Snare 2','Closed Hat','FX 2','Open Hat','Crash','Chop','Vox 2','Vox 3','Perc 2'];
   const all = []; for (let p = 0; p < 6; p++) for (let i = 0; i < 16; i++) all.push(p === 0 ? names[i] : '');
   let fx = [];
   const lights = () => all.map((n, i) => n === '' ? [] : i % 3 === 0 ? [fx[0], fx[3]] : i % 3 === 1 ? [fx[4]] : [fx[1], fx[5], fx[2]]);
