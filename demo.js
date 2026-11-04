@@ -6,6 +6,23 @@ const onScreen = el => { const r = el.getBoundingClientRect(); return r.bottom >
 const SK = { level1: '#58B3A1', level2: '#8A80C4', text: '#E1E1E4', edge: '#2B2C30' };
 const TEMPO = 134;
 
+// Writes the words of a heading exactly where the page has them. Where a browser draws the narrow cut
+// of the font on a canvas, each word is widened to the width it has on the page.
+function writeWords(g, spans, box, st) {
+  g.textBaseline = 'alphabetic';
+  g.font = `${st.fontWeight} expanded ${st.fontSize} ${st.fontFamily}`;
+  if ('fontStretch' in g) g.fontStretch = 'expanded';
+  if ('letterSpacing' in g) g.letterSpacing = st.letterSpacing;
+  spans.forEach(s => {
+    const r = s.getBoundingClientRect(), word = s.textContent.toUpperCase(), w = g.measureText(word).width;
+    g.save();
+    g.translate(r.left - box.left, r.top - box.top + r.height * .82);
+    if (w > 0) g.scale(r.width / w, 1);
+    g.fillText(word, 0, 0);
+    g.restore();
+  });
+}
+
 // ---- Headings come out of big pixels as you scroll ---------------------------------------------------------------------------
 const heads = [...document.querySelectorAll('h2')].map(h => {
   const words = h.textContent.trim().split(/\s+/);
@@ -15,7 +32,7 @@ const heads = [...document.querySelectorAll('h2')].map(h => {
 });
 function pixelHead(o, p) {
   const { h, c, g, spans, low } = o, e = 1 - Math.pow(1 - p, 2.2), block = Math.max(1, Math.round((1 - e) * 30));
-  if (p >= 1 || still) { if (o.last !== 1) { h.style.color = ''; c.style.display = 'none'; o.last = 1; } return; }
+  if (p >= 1 || block <= 2 || still) { if (o.last !== 1) { h.style.color = ''; c.style.display = 'none'; o.last = 1; } return; }
   if (block === o.last) return;
   o.last = block;
   const dpr = Math.min(2, devicePixelRatio || 1), W = h.clientWidth, H = h.clientHeight, box = h.getBoundingClientRect();
@@ -26,10 +43,8 @@ function pixelHead(o, p) {
   low.width = lw; low.height = lh;
   const l = low.getContext('2d'), st = getComputedStyle(h);
   l.setTransform(1 / block, 0, 0, 1 / block, 0, 0);
-  l.fillStyle = '#f5f5f7'; l.textBaseline = 'alphabetic'; l.font = `${st.fontWeight} ${st.fontSize} ${st.fontFamily}`;
-  if ('fontStretch' in l) l.fontStretch = 'expanded';
-  if ('letterSpacing' in l) l.letterSpacing = st.letterSpacing;
-  spans.forEach(s => { const r = s.getBoundingClientRect(); l.fillText(s.textContent.toUpperCase(), r.left - box.left, r.top - box.top + r.height * .82); });
+  l.fillStyle = '#f5f5f7';
+  writeWords(l, spans, box, st);
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height);
   g.imageSmoothingEnabled = false; g.globalAlpha = Math.min(1, .25 + e);
   g.drawImage(low, 0, 0, lw, lh, 0, 0, lw * block * dpr, lh * block * dpr);
@@ -264,10 +279,8 @@ function priceText(W, H, dpr, st, box) {
   if (textLayer.width !== Math.round(W * dpr) || textLayer.height !== Math.round(H * dpr) || textLayer.dataset.font !== st.fontSize) {
     textLayer.width = Math.round(W * dpr); textLayer.height = Math.round(H * dpr); textLayer.dataset.font = st.fontSize;
     const t = textLayer.getContext('2d');
-    t.setTransform(dpr, 0, 0, dpr, 0, 0); t.fillStyle = '#fff'; t.textBaseline = 'alphabetic'; t.font = `${st.fontWeight} ${st.fontSize} ${st.fontFamily}`;
-    if ('fontStretch' in t) t.fontStretch = 'expanded';
-    if ('letterSpacing' in t) t.letterSpacing = st.letterSpacing;
-    priceHead.spans.forEach(s => { const r = s.getBoundingClientRect(); t.fillText(s.textContent.toUpperCase(), r.left - box.left, r.top - box.top + r.height * .82); });
+    t.setTransform(dpr, 0, 0, dpr, 0, 0); t.fillStyle = '#fff';
+    writeWords(t, priceHead.spans, box, st);
   }
   return textLayer;
 }
