@@ -71,7 +71,7 @@ section{padding:clamp(60px,9vh,100px) 22px 0;max-width:1120px;margin:0 auto;over
 .fxc{position:absolute;left:0;top:0;width:var(--cw);margin:0;padding:0;border:0;background:none;cursor:zoom-in;border-radius:3px;box-shadow:0 16px 34px rgba(0,0,0,.72),0 2px 5px rgba(0,0,0,.6);transition:transform 1s cubic-bezier(.2,.75,.2,1),box-shadow .25s;transform:translate(var(--sx),var(--sy)) rotate(var(--sr));will-change:transform}
 .fxc img{border-radius:3px}
 #pile.in .fxc{transform:translate(var(--x),var(--y)) rotate(var(--r))}
-#pile.in .fxc:hover{transform:translate(var(--x),var(--y)) rotate(0deg) scale(1.1);z-index:50;transition-duration:.28s}
+#pile.in .fxc:hover,#pile.in .fxc:focus-visible{transform:translate(var(--x),var(--y)) rotate(0deg) scale(1.16);z-index:60!important;box-shadow:0 26px 60px rgba(0,0,0,.85);transition-duration:.25s;transition-delay:0s!important;outline:0}
 .more{font-stretch:125%;font-size:clamp(19px,1.9vw,25px);font-weight:700;margin-top:clamp(18px,2.2vw,26px);text-align:center}
 .fan{display:grid;grid-template-columns:repeat(6,1fr);margin:0 auto;padding:0 6%}
 .fan img{border-radius:3px;width:210%;max-width:none;box-shadow:0 10px 26px rgba(0,0,0,.72);transition:transform .25s;position:relative;cursor:zoom-in}
@@ -110,6 +110,11 @@ select{appearance:none;-webkit-appearance:none;border:0;background-color:#303034
 #box img{max-width:100vw;max-height:100dvh;width:auto;height:auto;object-fit:contain}
 #box button{position:absolute;width:44px;height:44px;border-radius:50%;border:1px solid #3a3a3c;background:rgba(28,28,30,.78);color:var(--w);font-size:19px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 0 2px}
 #bx{top:calc(env(safe-area-inset-top) + 12px);right:12px}#bp{left:12px;top:50%;margin-top:-22px}#bn{right:12px;top:50%;margin-top:-22px}
+#box.text{flex-direction:column;gap:clamp(14px,2.4vh,24px);padding:60px clamp(16px,6vw,70px) calc(env(safe-area-inset-bottom) + 28px)}
+#box.text img{width:100%;max-width:min(860px,100%);max-height:62dvh;height:auto;border-radius:4px;box-shadow:0 26px 70px rgba(255,255,255,.07)}
+#box.text #bcap{position:static;max-width:640px;text-shadow:none}
+#bdesc{display:none;max-width:640px;text-align:center}
+#box.text #bdesc{display:block;margin-top:-10px}
 #bcap{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 14px);text-align:center;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-shadow:0 0 8px #000}
 
 .up{opacity:0;transform:translateY(16px);transition:opacity .9s cubic-bezier(.2,.7,.2,1),transform .9s cubic-bezier(.2,.7,.2,1)}
@@ -125,6 +130,7 @@ select{appearance:none;-webkit-appearance:none;border:0;background-color:#303034
   .phones{grid-template-columns:minmax(0,.46fr) minmax(0,1fr)}
   .phonebox{border-radius:16px}
   .fan{height:92px;padding:0 3%}
+  #box.text #bp,#box.text #bn{top:auto;margin-top:0;bottom:calc(env(safe-area-inset-bottom) + 22px)}
 }
 </style>
 <script type="importmap">{"imports":{"three":"./lib/three.module.min.js"}}</script>
@@ -236,7 +242,7 @@ select{appearance:none;-webkit-appearance:none;border:0;background-color:#303034
 </section>
 <div class="fine">For macOS 12 or later, on Apple Silicon and Intel. The app isn't registered with Apple, so you'll need to allow it once under Privacy &amp; Security. The machines at the top are a 3D rendering of the real interface: STEPPER is software, not hardware. Audio Units and VST3 plugins aren't included. The iPhone page needs a Mac running STEPPER. This site plays no sound.</div>
 
-<div id="box" role="dialog" aria-modal="true"><img id="bimg" alt=""><div id="bcap"></div><button id="bx" aria-label="Close">&#10005;</button><button id="bp" aria-label="Previous">&#8249;</button><button id="bn" aria-label="Next">&#8250;</button></div>
+<div id="box" role="dialog" aria-modal="true"><img id="bimg" alt=""><div id="bcap"></div><p id="bdesc"></p><button id="bx" aria-label="Close">&#10005;</button><button id="bp" aria-label="Previous">&#8249;</button><button id="bn" aria-label="Next">&#8250;</button></div>
 
 <script type="module" src="stepper.js"></script>
 <script type="module" src="demo.js"></script>

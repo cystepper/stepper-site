@@ -49,8 +49,8 @@ document.querySelectorAll('.up').forEach(e => seenUp.observe(e));
 // ---- Full screen pictures -------------------------------------------------------------------------------------------------
 const box = $('box'), bimg = $('bimg'), bcap = $('bcap');
 let list = [], at = 0;
-function showAt(i) { at = (i + list.length) % list.length; bimg.src = list[at].src; bimg.alt = list[at].name; bcap.textContent = list[at].name; [list.forEach((x, k) => { if (Math.abs(k - at) === 1) new Image().src = x.src; })]; }
-function openBox(items, i) { list = items; showAt(i); box.classList.add('on'); document.documentElement.style.overflow = 'hidden'; if (box.requestFullscreen && matchMedia('(pointer:fine)').matches) box.requestFullscreen().catch(() => {}); }
+function showAt(i) { at = (i + list.length) % list.length; bimg.src = list[at].src; bimg.alt = list[at].name; bcap.textContent = list[at].name; $('bdesc').textContent = list[at].text || ''; box.classList.toggle('text', !!list[at].text); [list.forEach((x, k) => { if (Math.abs(k - at) === 1) new Image().src = x.src; })]; }
+function openBox(items, i) { list = items; showAt(i); box.classList.add('on'); document.documentElement.style.overflow = 'hidden'; if (!items[i].text && box.requestFullscreen && matchMedia('(pointer:fine)').matches) box.requestFullscreen().catch(() => {}); }
 function closeBox() { box.classList.remove('on'); document.documentElement.style.overflow = ''; if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
 $('bx').onclick = closeBox; $('bp').onclick = () => showAt(at - 1); $('bn').onclick = () => showAt(at + 1);
 box.addEventListener('click', e => { if (e.target === box) closeBox(); });
@@ -67,8 +67,24 @@ $('skins').addEventListener('click', e => {
 });
 
 // ---- Effect windows, lying about like cards ----------------------------------------------------------------------------------
-const FX = [['eq','EQ'],['resonance','Resonance Suppressor'],['compressor','Compressor'],['enveloper','Enveloper'],['sidechain','Sidechain'],['distortion','Distortion'],['flanger','Flanger'],['phaser','Phaser'],['rotor','Rotor Cabinet'],['delay','Delay'],['stereo_delay','Stereo Delay'],['reverb','Reverb'],['soft_clipper','Soft Clipper'],['hard_clipper','Hard Clipper'],['limiter','Limiter']];
-const fxItems = FX.map(([k, n]) => ({ src: `fx/${k}.jpg`, name: n }));
+const FX = [
+  ['eq', 'EQ', 'Shape your tone by dragging bands right in the curve, with the sound moving behind it.'],
+  ['resonance', 'Resonance Suppressor', 'Finds harsh resonances and pulls them down as they ring. Draw where it should work harder, and use Delta to hear what it takes out.'],
+  ['compressor', 'Compressor', 'Evens out the level. The curve shows your settings, and the dot and the bar show how hard it is working right now.'],
+  ['enveloper', 'Enveloper', 'Reshapes every hit: more or less attack, and a longer or shorter ring-out.'],
+  ['sidechain', 'Sidechain', 'Ducks the sound on every trigger, with eight curves to choose from. It can work on the bass alone.'],
+  ['distortion', 'Distortion', 'Four kinds of dirt, from warm to rude: Overdrive, Fuzz, Rectifier and Foldback.'],
+  ['flanger', 'Flanger', 'A sweeping comb of notches. You watch them slide across the sound as the delay moves.'],
+  ['phaser', 'Phaser', 'One to six moving notches that sweep through the sound, drawn as they happen.'],
+  ['rotor', 'Rotor Cabinet', 'The horn and drum of a rotary speaker, spinning slow or fast.'],
+  ['delay', 'Delay', 'Echoes of up to two seconds, with feedback and tone. Each bar is an echo.'],
+  ['stereo_delay', 'Stereo Delay', 'Left and right each get a time of their own, with feedback, tone and crossfeed.'],
+  ['reverb', 'Reverb', 'Space with up to 12 seconds of decay, plus size, damping and predelay.'],
+  ['soft_clipper', 'Soft Clipper', 'Rounds off the peaks at the ceiling for a warmer kind of loud.'],
+  ['hard_clipper', 'Hard Clipper', 'Cuts the peaks flat at the ceiling, for loudness with an edge.'],
+  ['limiter', 'Limiter', 'Holds your level under the ceiling. Red shows what goes over, and the bar how much is held back.'],
+];
+const fxItems = FX.map(([k, n, text]) => ({ src: `fx/${k}.jpg`, name: n, text }));
 const pile = $('pile');
 pile.innerHTML = FX.map(([k, n], i) => `<button class="fxc" data-i="${i}" aria-label="${n}"><img src="fx/${k}.jpg" alt="${n} window" loading="lazy"></button>`).join('');
 pile.addEventListener('click', e => { const c = e.target.closest('.fxc'); if (c) openBox(fxItems, +c.dataset.i); });
