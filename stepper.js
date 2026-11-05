@@ -167,17 +167,7 @@ const ledMat = new THREE.MeshStandardMaterial({ color: 0x33ff88, emissive: 0x33f
 
 // Only so many machines exist, and they take on whichever skins are in view as the ring turns.
 const FLOOR = -THICK - 1.0;
-const isSafari = /^((?!chrome|chromium|android).)*safari/i.test(navigator.userAgent);
-const plainTable = small || isSafari;     // Safari showed coloured dots on the lit table. So the table takes no light at all.
-const table = new THREE.Mesh(new THREE.CircleGeometry(150, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x050506, toneMapped: false, transparent: !plainTable, opacity: plainTable ? 1 : .86 }));
-table.position.y = FLOOR;
-table.renderOrder = 2;
-const tableShade = new THREE.Mesh(new THREE.CircleGeometry(150, 64).rotateX(-Math.PI / 2), new THREE.ShadowMaterial({ opacity: .7 }));
-tableShade.position.y = FLOOR + .05;
-tableShade.receiveShadow = true;
-tableShade.renderOrder = 2;
-scene.add(tableShade);
-scene.add(table);
+// No table surface: the machines stand on plain black, in a pool of light.
 // A soft pool of light on the table, in the colours of the skin in front, so the machines don't stand in plain black.
 const glowCanvas = document.createElement('canvas'); glowCanvas.width = glowCanvas.height = 512;
 { const g = glowCanvas.getContext('2d'), r = g.createRadialGradient(256, 256, 0, 256, 256, 256);
@@ -225,14 +215,6 @@ class Machine {
       return { mesh, material, press: 0, glow: 0 };
     });
     this.skin = -1;
-    // A real reflection in the table on large screens: the same machine once more, upside down below it.
-    if (!plainTable) {
-      const mirror = new THREE.Mesh(bodyGeo, this.bodyMat);
-      mirror.scale.y = -1;
-      mirror.rotation.x = -this.tilt.rotation.x;
-      mirror.position.y = FLOOR * 2 + THICK / 2;
-      this.group.add(mirror);
-    }
     scene.add(this.group);
   }
   wear(index) {
