@@ -40,7 +40,8 @@ const still = matchMedia('(prefers-reduced-motion:reduce)').matches;
 const PX = 2000, PY = 1170, W = PX / 100, D = PY / 100;
 const canvas = document.getElementById('c');
 const small = Math.min(innerWidth, innerHeight) < 700;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+renderer.setClearColor(0x000000, 1);
 renderer.setPixelRatio(Math.min(small ? 2 : 2, devicePixelRatio || 1));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
@@ -48,6 +49,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
 scene.fog = new THREE.Fog(0x000000, 40, 92);
 const pmrem = new THREE.PMREMGenerator(renderer);
 // A dark studio with big soft lights: they are what edges, knobs and glass reflect.
