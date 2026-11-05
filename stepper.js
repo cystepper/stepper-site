@@ -40,12 +40,15 @@ const still = matchMedia('(prefers-reduced-motion:reduce)').matches;
 const PX = 2000, PY = 1170, W = PX / 100, D = PY / 100;
 const canvas = document.getElementById('c');
 const small = Math.min(innerWidth, innerHeight) < 700;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+// A temporary test: ?a=1 to ?a=4 switch off one more part of the picture each.
+const TEST = +new URLSearchParams(location.search).get('a') || 0;
+if (TEST >= 2) document.getElementById('hero').classList.add('novignette');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: TEST < 4, alpha: false, powerPreference: 'high-performance' });
 renderer.setClearColor(0x000000, 1);
-renderer.setPixelRatio(Math.min(small ? 2 : 2, devicePixelRatio || 1));
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.setPixelRatio(TEST >= 4 ? 1 : Math.min(2, devicePixelRatio || 1));
+renderer.toneMapping = TEST >= 3 ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = TEST < 3;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
@@ -65,7 +68,7 @@ softbox(5, 24, 26, 8, 2, 3.2, 0xdce8ff);
 softbox(34, 2.4, 0, 7, 28, 5);
 softbox(24, 7, 0, 10, -28, 1.6, 0xbcd0ff);
 scene.environment = pmrem.fromScene(studio, .012).texture;
-scene.environmentIntensity = .85;
+scene.environmentIntensity = TEST >= 3 ? 0 : .85;
 const camera = new THREE.PerspectiveCamera(24, 1, 1, 260);
 
 const key = new THREE.DirectionalLight(0xfff3e6, 2.0);
@@ -177,7 +180,7 @@ const glowMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(glowC
 const glow = new THREE.Mesh(new THREE.PlaneGeometry(W * 3, D * 3.4).rotateX(-Math.PI / 2), glowMat);
 glow.position.set(0, FLOOR + .1, 1);
 glow.renderOrder = 3;
-scene.add(glow);
+if (TEST < 1) scene.add(glow);
 const glowWanted = new THREE.Color(0x8a8a90);
 const STEP = Math.PI / 4.4, REACH = 2;      // Angle between neighbours, and how many are built to each side.
 const insideGeo = new THREE.BoxGeometry(W + MARGIN * 2 - .5, THICK * .55, D + MARGIN * 2 - .5).translate(0, -THICK * .55, 0);
