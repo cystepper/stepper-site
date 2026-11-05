@@ -124,9 +124,32 @@ function layPile() {
 layPile(); addEventListener('resize', layPile);
 new IntersectionObserver((l, o) => { if (l[0].isIntersecting) { pile.classList.add('in'); o.disconnect(); setTimeout(() => [...pile.children].forEach(c => c.style.transitionDelay = '0s'), 1500); } }, { threshold: .18 }).observe(pile);
 
+// The same window six times along an arc, with the colours travelling through all of them.
 const hues = ['Red','Orange','Yellow','Green','Blue','Violet'], colourItems = hues.map((n, i) => ({ src: `fx/colour_${i + 1}.jpg`, name: n }));
-$('fan').innerHTML = hues.map((n, i) => `<div><img src="fx/colour_${i + 1}.jpg" alt="An effect window in ${n.toLowerCase()}" data-i="${i}" loading="lazy"></div>`).join('');
-$('fan').addEventListener('click', e => { if (e.target.dataset.i !== undefined) openBox(colourItems, +e.target.dataset.i); });
+const fan = $('fan');
+fan.innerHTML = hues.map((n, i) => `<button class="fc" data-i="${i}" aria-label="An effect window in many colors">${hues.map((c, k) => `<img src="fx/colour_${k + 1}.jpg" alt="" class="${k === i ? 'on' : ''}">`).join('')}</button>`).join('');
+fan.addEventListener('click', e => { const c = e.target.closest('.fc'); if (c) openBox(colourItems, (+c.dataset.i + colourTick) % 6); });
+function layFan() {
+  const w = fan.clientWidth, narrow = w < 620, cw = w * (narrow ? .44 : .3), ch = cw * .445, step = cw * (narrow ? .26 : .46);
+  fan.style.setProperty('--fw', Math.round(cw) + 'px');
+  let lowest = 0;
+  [...fan.children].forEach((c, i) => {
+    const q = i - 2.5, y = q * q * cw * (narrow ? .05 : .042);
+    lowest = Math.max(lowest, y);
+    c.style.setProperty('--x', Math.round(q * step) + 'px');
+    c.style.setProperty('--y', Math.round(y) + 'px');
+    c.style.setProperty('--r', (q * 4.2).toFixed(1) + 'deg');
+    c.style.zIndex = 20 - Math.round(Math.abs(q) * 2);
+  });
+  fan.style.setProperty('--fh', Math.round(lowest + ch + cw * .1) + 'px');
+}
+layFan(); addEventListener('resize', layFan);
+let colourTick = 0;
+setInterval(() => {
+  if (still || !onScreen(fan)) return;
+  colourTick = (colourTick + 1) % 6;
+  [...fan.children].forEach((c, i) => [...c.children].forEach((img, k) => img.classList.toggle('on', k === (i + colourTick) % 6)));
+}, 1500);
 
 // ---- The real pad page, in frames ---------------------------------------------------------------------------------------------
 const hitFrames = pad => ['padframe', 'ftall', 'fwide'].map($).forEach(f => { if (onScreen(f) && f.contentWindow) f.contentWindow.postMessage({ hit: pad }, '*'); });
@@ -227,10 +250,10 @@ rollC.addEventListener('click', e => { const r = rollC.getBoundingClientRect(), 
 addEventListener('resize', redraw); redraw();
 
 // ---- Output display and the dancing man -------------------------------------------------------------------------------------------
-const visual = new Visual(), man = $('man'), mg = man.getContext('2d'), pic = $('vis'), pg = pic.getContext('2d');
-let vStyle = 0, vClip = -1, clipData = null, danceData = null, dance = 7, beat = 0, level = 0;
-$('vdance').innerHTML = DANCES.map((d, i) => `<option${i === 7 ? ' selected' : ''}>${d}</option>`).join('');
-$('vdance').onchange = e => dance = e.target.selectedIndex;
+const visual = new Visual(), pic = $('vis'), pg = pic.getContext('2d');
+let vStyle = 0, vClip = -1, clipData = null, danceData = null, beat = 0, level = 0;
+$('dances').innerHTML = DANCES.map(d => `<figure class="dance"><canvas></canvas><figcaption>${d}</figcaption></figure>`).join('');
+const danceCanvases = [...$('dances').querySelectorAll('canvas')].map(c => ({ c, g: c.getContext('2d') }));
 $('vstyle').onchange = async e => { const i = e.target.selectedIndex; if (i < 4) { vStyle = i; vClip = -1; } else { vClip = i - 4; clipData = null; const data = await loadBin(CLIPS[vClip]); if (vClip === i - 4) clipData = data; } };
 const col = t => mixColour(SK.level1, SK.level2, t);
 function fitCanvas(c) { const dpr = Math.min(2, devicePixelRatio || 1), w = c.clientWidth, h = c.clientHeight; if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); } return dpr; }
@@ -238,17 +261,20 @@ function drawOutput() {
   const dpr = fitCanvas(pic);
   pg.setTransform(dpr, 0, 0, dpr, 0, 0); pg.clearRect(0, 0, pic.clientWidth, pic.clientHeight);
   if (vClip >= 0 && clipData) paintClip(pg, pic.clientWidth, pic.clientHeight, clipData, beat, col);
-  else if (vClip < 0) visual.paint(pg, pic.clientWidth, pic.clientHeight, vStyle, 3, col);
+  else if (vClip < 0) visual.paint(pg, pic.clientWidth, pic.clientHeight, vStyle, +$('vsize').value, col);
 }
-function drawMan() {
-  const dpr = fitCanvas(man);
-  mg.setTransform(dpr, 0, 0, dpr, 0, 0); mg.clearRect(0, 0, man.clientWidth, man.clientHeight);
-  if (danceData) paintDancer(mg, man.clientWidth, man.clientHeight, danceData, dance, beat, '#E8E9EB');
+function drawDancers() {
+  if (!danceData) return;
+  danceCanvases.forEach(({ c, g }, i) => {
+    const dpr = fitCanvas(c), w = c.clientWidth, h = c.clientHeight;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    paintDancer(g, w, h, danceData, i, beat, '#E8E9EB');
+  });
 }
 loadBin('dancers').then(d => danceData = d);
 
 // ---- The price: the visualizer runs inside its letters, and only there -------------------------------------------------------------
-const priceHead = heads.find(o => o.h.closest('.price')), priceFill = document.createElement('canvas');
+const priceHead = heads.find(o => o.h.id === 'big'), priceFill = document.createElement('canvas');
 priceFill.className = 'fill'; priceHead.h.appendChild(priceFill);
 const priceBars = new Visual(), priceG = priceFill.getContext('2d'), priceCol = t => mixColour('#7fe3cf', '#b9a8ff', t);
 function drawPrice() {
@@ -267,7 +293,7 @@ function drawPrice() {
     const want = Math.min(1, (.3 + .62 * Math.abs(Math.sin(i * 1.7 + t * 3.1) * Math.sin(i * .61 - t * 1.9))) * (.62 + level * .75));
     bars[i] = Math.max(want, bars[i] * .9);
   }
-  priceBars.paint(g, W, H, 0, W < 500 ? 2 : 3, priceCol);
+  priceBars.paint(g, W, H, 0, W < 500 ? 4 : 6, priceCol);
   g.globalCompositeOperation = 'destination-in';
   const layer = priceText(W, H, dpr, st, box);
   g.setTransform(1, 0, 0, 1, 0, 0);
@@ -291,8 +317,8 @@ let last = performance.now(), lastStep = -1;
 function loop(now) {
   requestAnimationFrame(loop);
   const dt = Math.min(.05, (now - last) / 1000); last = now;
-  if (still) { if (lastStep < 0) { lastStep = 0; drawOutput(); drawMan(); } return; }
-  const seqSeen = onScreen($('daw')), padSeen = onScreen($('padframe')), outSeen = onScreen($('outp')), manSeen = onScreen(man), priceSeen = onScreen(priceHead.h);
+  if (still) { if (lastStep < 0) { lastStep = 0; drawOutput(); drawDancers(); } return; }
+  const seqSeen = onScreen($('daw')), padSeen = onScreen($('padframe')), outSeen = onScreen($('outp')), manSeen = onScreen($('dances')), priceSeen = onScreen(priceHead.h);
   if (!seqSeen && !padSeen && !outSeen && !manSeen && !priceSeen && !onScreen($('ptall'))) return;
   beat += dt * TEMPO / 60;
   const step = Math.floor(beat * 4) % STEPS;
@@ -304,6 +330,6 @@ function loop(now) {
   level *= Math.exp(-dt / .16);
   if (outSeen) { visual.step(dt, null, null, null, level, now / 1000); drawOutput(); }
   if (priceSeen) drawPrice();
-  if (manSeen) drawMan();
+  if (manSeen) drawDancers();
 }
 requestAnimationFrame(loop);

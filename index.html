@@ -68,23 +68,29 @@ section{padding:clamp(60px,9vh,100px) 22px 0;max-width:1120px;margin:0 auto;over
 .pane canvas{display:block;min-width:440px;width:100%;touch-action:pan-x pan-y}
 .panetitle{font-size:12px;color:var(--g);text-transform:uppercase;padding:0 0 5px}.panetitle b{color:var(--w);font-weight:400;margin-left:8px}
 
-#pile{position:relative;margin-top:clamp(18px,2vw,26px);height:var(--ph,620px)}
+#pile{position:relative;margin-top:clamp(40px,4.6vw,64px);height:var(--ph,620px)}
 .fxc{position:absolute;left:0;top:0;width:var(--cw);margin:0;padding:0;border:0;background:none;cursor:zoom-in;border-radius:3px;box-shadow:0 16px 34px rgba(0,0,0,.72),0 2px 5px rgba(0,0,0,.6);transition:transform 1s cubic-bezier(.2,.75,.2,1),box-shadow .25s;transform:translate(var(--sx),var(--sy)) rotate(var(--sr));will-change:transform}
 .fxc img{border-radius:3px}
 #pile.in .fxc{transform:translate(var(--x),var(--y)) rotate(var(--r))}
 #pile.in .fxc:hover,#pile.in .fxc:focus-visible{transform:translate(var(--x),var(--y)) rotate(0deg) scale(1.16);z-index:60!important;box-shadow:0 26px 60px rgba(0,0,0,.85);transition-duration:.25s;transition-delay:0s!important;outline:0}
 .more{font-stretch:125%;font-size:clamp(19px,1.9vw,25px);font-weight:700;margin-top:clamp(18px,2.2vw,26px);text-align:center}
-.fan{display:grid;grid-template-columns:repeat(6,1fr);margin:0 auto;padding:0 6%}
-.fan img{border-radius:3px;width:210%;max-width:none;box-shadow:0 10px 26px rgba(0,0,0,.72);transition:transform .25s;position:relative;cursor:zoom-in}
-.fan div:nth-child(1) img{transform:rotate(-7deg) translateY(10px)}.fan div:nth-child(2) img{transform:rotate(-4deg) translateY(3px)}.fan div:nth-child(3) img{transform:rotate(-1deg)}.fan div:nth-child(4) img{transform:rotate(1.5deg)}.fan div:nth-child(5) img{transform:rotate(4deg) translateY(3px)}.fan div:nth-child(6) img{transform:rotate(7deg) translateY(10px)}
-.fan{height:clamp(120px,14vw,190px)}
-
-#outp{background:#161618;border:1px solid var(--edge);padding:10px;border-radius:10px}
-#outh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.fan{position:relative;height:var(--fh,260px);margin-bottom:clamp(14px,2vw,26px)}
+.fc{position:absolute;left:50%;top:0;width:var(--fw,300px);margin:0;padding:0;border:0;background:#17181b;border-radius:3px;cursor:zoom-in;box-shadow:0 14px 32px rgba(0,0,0,.8);transform:translateX(-50%) translate(var(--x),var(--y)) rotate(var(--r));transition:transform .28s cubic-bezier(.2,.75,.2,1)}
+.fc:hover{transform:translateX(-50%) translate(var(--x),calc(var(--y) - 10px)) rotate(var(--r)) scale(1.06);z-index:30!important}
+.fc img{border-radius:3px}
+.fc img+img{position:absolute;left:0;top:0}
+.fc img{opacity:0;transition:opacity 1.3s ease}
+.fc img.on{opacity:1}
+.fc img:first-child{position:relative}
+#outp{background:#161618;border:1px solid var(--edge);padding:10px;border-radius:10px;max-width:880px;margin:clamp(20px,2.6vw,32px) auto 0}
+#outh{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;font-size:12px;text-transform:uppercase;color:var(--g)}
+#outh input{accent-color:#d8d8dc;width:90px}
 select{appearance:none;-webkit-appearance:none;border:0;background-color:#303034;color:#e8e8ec;font:12px var(--font);text-transform:uppercase;height:30px;padding:0 24px 0 11px;background-image:linear-gradient(45deg,transparent 50%,#d8d8dc 50%),linear-gradient(135deg,#d8d8dc 50%,transparent 50%);background-position:right 12px center,right 8px center;background-size:4px 4px;background-repeat:no-repeat;border-radius:0}
-#vis{display:block;width:100%;height:clamp(110px,14vw,150px);background:#101113;border:1px solid #000}
-#manbox{display:flex;flex-direction:column;align-items:center;gap:10px}
-#man{display:block;width:clamp(150px,18vw,220px);height:clamp(150px,18vw,220px);background:#101113;border:1px solid #2c2c2f;border-radius:6px}
+#vis{display:block;width:100%;aspect-ratio:175/31;height:auto;background:#101113;border:1px solid #000;box-shadow:inset 0 0 14px #000}
+#dances{display:grid;grid-template-columns:repeat(13,minmax(0,1fr));gap:clamp(5px,.6vw,9px);margin-top:clamp(20px,2.6vw,32px)}
+.dance{margin:0;text-align:center;min-width:0}
+.dance canvas{display:block;width:100%;aspect-ratio:1;background:#101113;border:1px solid #2c2c2f;border-radius:4px}
+.dance figcaption{font-size:10px;line-height:1.2;color:var(--g);margin-top:5px;text-transform:uppercase}
 
 .skins{display:grid;grid-template-columns:repeat(7,1fr);gap:clamp(6px,.8vw,12px);margin-top:clamp(20px,2.4vw,30px)}
 .skins figure{margin:0;cursor:zoom-in}.skins img{border-radius:4px;background:#111;aspect-ratio:2000/1170;object-fit:cover;transition:transform .3s cubic-bezier(.2,.7,.2,1)}
@@ -106,9 +112,12 @@ select{appearance:none;-webkit-appearance:none;border:0;background-color:#303034
 .story p{margin-top:12px}
 .price{text-align:center;padding-bottom:clamp(50px,8vh,80px)}
 .price .pre{font-size:clamp(20px,2vw,27px)}
-.price h2{font-size:clamp(38px,6.4vw,84px);letter-spacing:-.025em;margin-top:6px}
-.price h2.live{color:transparent!important}
-.price h2 canvas.fill{display:block;left:0;top:0;width:100%;height:100%;max-width:none;image-rendering:auto}
+.price .only{font-size:clamp(30px,4.6vw,60px);letter-spacing:-.015em;margin-top:8px}
+#big{font-size:clamp(150px,27vw,380px);line-height:.92;letter-spacing:-.03em;margin-top:2px}
+#free{display:inline-block;cursor:default;transition:color .3s ease,text-shadow .3s ease}
+#free:hover,#free:active{color:#fff;text-shadow:0 0 8px rgba(255,255,255,.95),0 0 22px rgba(185,168,255,.95),0 0 46px rgba(127,227,207,.85)}
+.price h2#big.live{color:transparent!important}
+#big canvas.fill{display:block;left:0;top:0;width:100%;height:100%;max-width:none;image-rendering:auto}
 .price .after b{font-weight:700}
 .price .after{max-width:30em;margin:14px auto 0}
 .beta{font-stretch:125%;margin-top:clamp(22px,3vw,34px);font-weight:700;font-size:clamp(17px,1.6vw,21px)}
@@ -133,12 +142,12 @@ select{appearance:none;-webkit-appearance:none;border:0;background-color:#303034
   .split{grid-template-columns:minmax(0,1fr)}.split.flip>:first-child{order:0}.split h2{text-align:center}.split p{text-align:center}
   .split .chips{justify-content:center}.chiplabel{text-align:center}
   .numbers{grid-template-columns:repeat(4,1fr);gap:4px}.numbers span{font-size:12px}
+  #dances{display:flex;flex-wrap:wrap;justify-content:center}.dance{width:calc((100% - 30px)/4.6)}
   .bento{grid-template-columns:repeat(2,1fr)}.bento p{font-size:14px}.bento.three{grid-template-columns:1fr}
   .skins{grid-template-columns:repeat(3,1fr)}
   #panes{grid-template-columns:1fr}
   .phones{grid-template-columns:minmax(0,.46fr) minmax(0,1fr)}
   .phonebox{border-radius:16px}
-  .fan{height:92px;padding:0 3%}
   #box.text #bp,#box.text #bn{top:auto;margin-top:0;bottom:calc(env(safe-area-inset-bottom) + 22px)}
 }
 </style>
@@ -185,10 +194,10 @@ select{appearance:none;-webkit-appearance:none;border:0;background-color:#303034
   <p class="up soft" style="text-align:center;margin-top:6px">Audio Units and VST3 plugins sit right in the chain, and in the export too.</p>
 </section>
 
-<section class="split flip">
-  <div><h2>Your colors. Your chain.</h2>
-  <p class="up">Give any effect the color you want. Its window, its knobs and the lights on its pads follow.</p></div>
+<section>
   <div class="fan up" id="fan"></div>
+  <div class="lead"><h2>Your colors. Your chain.</h2>
+  <p class="up">Give any effect the color you want. Its window, its knobs and the lights on its pads follow.</p></div>
 </section>
 
 <section>
@@ -203,16 +212,16 @@ select{appearance:none;-webkit-appearance:none;border:0;background-color:#303034
   </div>
 </section>
 
-<section class="split">
-  <div><h2>See what you're hearing.</h2>
+<section>
+  <div class="lead"><h2>See what you're hearing.</h2>
   <p class="up">Blocks, Sphere, Ring and Wave, plus six pixel films that turn up between the beats.</p></div>
-  <div id="outp" class="up"><div id="outh"><select id="vstyle" aria-label="Style"><option>Blocks</option><option>Sphere</option><option>Ring</option><option>Wave</option><option>Sword</option><option>Tokyo</option><option>War</option><option>Flowers</option><option>Duel</option><option>Kawaii</option></select></div><canvas id="vis"></canvas></div>
+  <div id="outp" class="up"><div id="outh"><span>Output</span><select id="vstyle" aria-label="Style"><option>Blocks</option><option>Sphere</option><option>Ring</option><option>Wave</option><option>Sword</option><option>Tokyo</option><option>War</option><option>Flowers</option><option>Duel</option><option>Kawaii</option></select><input type="range" id="vsize" min="2" max="8" value="3" aria-label="Pixel size"></div><canvas id="vis"></canvas></div>
 </section>
 
-<section class="split flip">
-  <div><h2>Meet the dancing man.</h2>
-  <p class="up">He lives beside the visualizer and knows 13 dances. He falls apart when the music stops, flinches when you clip, and reacts to every effect you edit.</p></div>
-  <div id="manbox" class="up"><canvas id="man"></canvas><select id="vdance" aria-label="Dance"></select></div>
+<section>
+  <div class="lead"><h2>Meet the dancing man.</h2>
+  <p class="up">He lives beside the visualizer, falls apart when the music stops, flinches when you clip and reacts to every effect you edit. He knows 13 dances. Yes, that includes the Macarena.</p></div>
+  <div id="dances" class="up"></div>
 </section>
 
 <section>
@@ -246,15 +255,16 @@ select{appearance:none;-webkit-appearance:none;border:0;background-color:#303034
 
 <section class="price">
   <p class="pre up">And the best thing is,</p>
-  <h2>it's only 1$.</h2>
-  <p class="after up"><b>But you can have it for free too!</b> Because this project is from a producer, for the producers. For the love of it.</p>
+  <h2 class="only">it's only</h2>
+  <h2 id="big">1$</h2>
+  <p class="after up"><b id="free">But you can have it for free too!</b> Because this project is from a producer, for the producers. For the love of it.</p>
   <p class="beta up">Beta is in the works and will be released shortly.</p>
 </section>
-<div class="fine">For macOS 12 or later, on Apple Silicon and Intel. The app isn't registered with Apple, so you'll need to allow it once under Privacy &amp; Security. The machines at the top are a 3D rendering of the real interface: STEPPER is software, not hardware. Audio Units and VST3 plugins aren't included. The iPhone page needs a Mac running STEPPER. This site plays no sound.</div>
+<div class="fine">STEPPER requires macOS 12 or later and runs on Apple Silicon and Intel Macs. The app is not notarized by Apple and must be approved once under System Settings &gt; Privacy &amp; Security on first launch. The devices shown at the top of this page are 3D renderings of the software interface. STEPPER is software, not hardware. Audio Unit and VST3 plugins are not included. The iPhone controller requires a Mac running STEPPER, connected over Wi-Fi or USB-C. This website plays no audio.</div>
 
 <div id="box" role="dialog" aria-modal="true"><img id="bimg" alt=""><div id="bcap"></div><p id="bdesc"></p><button id="bx" aria-label="Close">&#10005;</button><button id="bp" aria-label="Previous">&#8249;</button><button id="bn" aria-label="Next">&#8250;</button></div>
 
 <script type="module" src="stepper.js?v=10"></script>
-<script type="module" src="demo.js?v=4"></script>
+<script type="module" src="demo.js?v=6"></script>
 </body>
 </html>
