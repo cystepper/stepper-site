@@ -40,8 +40,8 @@ const still = matchMedia('(prefers-reduced-motion:reduce)').matches;
 const PX = 2000, PY = 1170, W = PX / 100, D = PY / 100;
 const canvas = document.getElementById('c');
 const small = Math.min(innerWidth, innerHeight) < 700;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
-renderer.setClearColor(0x000000, 1);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+renderer.setClearColor(0x000000, 0);
 renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
@@ -49,7 +49,6 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
 scene.fog = new THREE.Fog(0x000000, 40, 92);
 const pmrem = new THREE.PMREMGenerator(renderer);
 // A dark studio with big soft lights: they are what edges, knobs and glass reflect.
@@ -168,16 +167,8 @@ const ledMat = new THREE.MeshStandardMaterial({ color: 0x33ff88, emissive: 0x33f
 // Only so many machines exist, and they take on whichever skins are in view as the ring turns.
 const FLOOR = -THICK - 1.0;
 // No table surface: the machines stand on plain black, in a pool of light.
-// A soft pool of light on the table, in the colours of the skin in front, so the machines don't stand in plain black.
-const glowCanvas = document.createElement('canvas'); glowCanvas.width = glowCanvas.height = 512;
-{ const g = glowCanvas.getContext('2d'), r = g.createRadialGradient(256, 256, 0, 256, 256, 256);
-  r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(.38, 'rgba(255,255,255,.62)'); r.addColorStop(.7, 'rgba(255,255,255,.16)'); r.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = r; g.fillRect(0, 0, 512, 512); }
-const glowMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(glowCanvas), color: 0x8a8a90, transparent: true, opacity: .58, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false });
-const glow = new THREE.Mesh(new THREE.PlaneGeometry(W * 3, D * 3.4).rotateX(-Math.PI / 2), glowMat);
-glow.position.set(0, FLOOR + .1, 1);
-glow.renderOrder = 3;
-scene.add(glow);
+// The soft pool of light under the machines lies behind the canvas, in the page itself. Drawn in 3D it showed coloured dots.
+const glowEl = document.getElementById('glow');
 const glowWanted = new THREE.Color(0x8a8a90);
 const STEP = Math.PI / 4.4, REACH = 2;      // Angle between neighbours, and how many are built to each side.
 const insideGeo = new THREE.BoxGeometry(W + MARGIN * 2 - .5, THICK * .55, D + MARGIN * 2 - .5).translate(0, -THICK * .55, 0);
@@ -471,9 +462,9 @@ function runLive(now, dt, tempo) {
   if (qt !== liveLast) { liveLast = qt; const s = qt % 16; if (s === 0 || s === 10) liveLevel = 1; else if (s === 4 || s === 12) liveLevel = .85; else liveLevel = Math.max(liveLevel, .28); }
   if (!LIVE.skins) return;
   const fk = LIVE.skins[SKINS[front.skin].key]; if (!fk) return;
-  glowWanted.set(fk.level1).lerp(new THREE.Color(fk.level2), .4).lerp(new THREE.Color(0xffffff), .28);
-  glowMat.color.lerp(glowWanted, Math.min(1, dt * 3));
-  glowMat.opacity = .58 + liveLevel * .08;
+  glowWanted.setStyle(fk.level1, THREE.LinearSRGBColorSpace).lerp(new THREE.Color().setStyle(fk.level2, THREE.LinearSRGBColorSpace), .4).lerp(new THREE.Color(0xffffff), .28);
+  glowEl.style.setProperty('--g', `${Math.round(glowWanted.r * 255)},${Math.round(glowWanted.g * 255)},${Math.round(glowWanted.b * 255)}`);
+  glowEl.style.opacity = (.88 + liveLevel * .12).toFixed(2);
   LIVE.visual.step(dt, null, null, null, liveLevel, now / 1000);
   const spec = new Float32Array(48); for (let i = 0; i < 48; i++) spec[i] = LIVE.visual.barAt(i / 47) * .92;
   stepState(LIVE.reso, 'resonance', resoP, dt, liveLevel, spec);
