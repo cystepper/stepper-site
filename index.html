@@ -25,7 +25,6 @@ button{font-family:inherit}
 
 #hero{position:relative;height:min(100svh,calc(50vw + 345px));min-height:530px;overflow:hidden;background:#000}
 #hero::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,transparent 76%,#000 100%),radial-gradient(120% 90% at 50% 45%,transparent 58%,rgba(0,0,0,.62) 100%);z-index:1}
-#hero.novignette::after{display:none}
 #c{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab;opacity:0;transition:opacity 1.4s ease}
 #c.on{opacity:1}#c.drag{cursor:grabbing}
 #brand{position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + clamp(48px,8vh,84px));z-index:2;display:flex;justify-content:center;align-items:center;gap:clamp(7px,.9vw,13px);pointer-events:none}
@@ -253,7 +252,7 @@ select{appearance:none;-webkit-appearance:none;border:0;background-color:#303034
 
 <div id="box" role="dialog" aria-modal="true"><img id="bimg" alt=""><div id="bcap"></div><p id="bdesc"></p><button id="bx" aria-label="Close">&#10005;</button><button id="bp" aria-label="Previous">&#8249;</button><button id="bn" aria-label="Next">&#8250;</button></div>
 
-<script type="module" src="stepper.js?v=8"></script>
+<script type="module" src="stepper.js?v=9"></script>
 <script type="module" src="demo.js?v=4"></script>
 </body>
 </html>
