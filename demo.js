@@ -1,63 +1,13 @@
 // What moves on the page besides the machines at the top. It plays no sound.
-import { Visual, CLIPS, DANCES, loadBin, paintClip, paintDancer, mixColour, clamp } from './live.js?v=3';
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const $ = id => document.getElementById(id);
 const still = matchMedia('(prefers-reduced-motion:reduce)').matches;
 const onScreen = el => { const r = el.getBoundingClientRect(); return r.bottom > -40 && r.top < innerHeight + 40; };
 const SK = { level1: '#58B3A1', level2: '#8A80C4', text: '#E1E1E4', edge: '#2B2C30' };
 const TEMPO = 134;
 
-// Writes the words of a heading exactly where the page has them. Where a browser draws the narrow cut
-// of the font on a canvas, each word is widened to the width it has on the page.
-function writeWords(g, spans, box, st) {
-  g.textBaseline = 'alphabetic';
-  g.font = `${st.fontWeight} expanded ${st.fontSize} ${st.fontFamily}`;
-  if ('fontStretch' in g) g.fontStretch = 'expanded';
-  if ('letterSpacing' in g) g.letterSpacing = st.letterSpacing;
-  spans.forEach(s => {
-    const r = s.getBoundingClientRect(), word = s.textContent.toUpperCase(), w = g.measureText(word).width;
-    g.save();
-    g.translate(r.left - box.left, r.top - box.top + r.height * .82);
-    if (w > 0) g.scale(r.width / w, 1);
-    g.fillText(word, 0, 0);
-    g.restore();
-  });
-}
-
-// ---- Headings come out of big pixels as you scroll ---------------------------------------------------------------------------
-const heads = [...document.querySelectorAll('h2')].map(h => {
-  const words = h.textContent.trim().split(/\s+/);
-  h.innerHTML = words.map(w => `<span class="w">${w}</span>`).join(' ');
-  const c = document.createElement('canvas'); h.appendChild(c);
-  return { h, c, g: c.getContext('2d'), spans: [...h.querySelectorAll('.w')], low: document.createElement('canvas'), last: -1 };
-});
-function pixelHead(o, p) {
-  const { h, c, g, spans, low } = o, e = 1 - Math.pow(1 - p, 2.2), block = Math.max(1, Math.round((1 - e) * 30));
-  if (p >= 1 || block <= 2 || still) { if (o.last !== 1) { h.style.color = ''; c.style.display = 'none'; o.last = 1; } return; }
-  if (block === o.last) return;
-  o.last = block;
-  const dpr = Math.min(2, devicePixelRatio || 1), W = h.clientWidth, H = h.clientHeight, box = h.getBoundingClientRect();
-  c.style.display = 'block'; c.style.width = W + 'px'; c.style.height = H + 'px';
-  h.style.color = 'transparent';
-  c.width = W * dpr; c.height = H * dpr;
-  const lw = Math.max(1, Math.ceil(W / block)), lh = Math.max(1, Math.ceil(H / block));
-  low.width = lw; low.height = lh;
-  const l = low.getContext('2d'), st = getComputedStyle(h);
-  l.setTransform(1 / block, 0, 0, 1 / block, 0, 0);
-  l.fillStyle = '#f5f5f7';
-  writeWords(l, spans, box, st);
-  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height);
-  g.imageSmoothingEnabled = false; g.globalAlpha = Math.min(1, .25 + e);
-  g.drawImage(low, 0, 0, lw, lh, 0, 0, lw * block * dpr, lh * block * dpr);
-}
-let queued = false;
-function moveHeads() {
-  queued = false;
-  const vh = innerHeight;
-  heads.forEach(o => { const r = o.h.getBoundingClientRect(); if (r.bottom < -100 || r.top > vh + 100) return; pixelHead(o, clamp((vh * .94 - r.top) / (vh * .26), 0, 1)); });
-}
-addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(moveHeads); } }, { passive: true });
-addEventListener('resize', () => { heads.forEach(o => { o.last = -1; o.c.style.display = 'none'; }); moveHeads(); });
-moveHeads(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveHeads);
+// ---- Headings and texts fade in as you scroll to them --------------------------------------------------------------------------
+document.querySelectorAll('h2').forEach(h => h.classList.add('up'));
 const seenUp = new IntersectionObserver(l => l.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); seenUp.unobserve(e.target); } }), { threshold: .08 });
 document.querySelectorAll('.up').forEach(e => seenUp.observe(e));
 
@@ -84,14 +34,14 @@ $('skins').addEventListener('click', e => {
 // ---- Effect windows, lying about like cards ----------------------------------------------------------------------------------
 const FX = [
   ['eq', 'EQ', 'Shape your tone by dragging bands right in the curve, with the sound moving behind it.'],
-  ['resonance', 'Resonance Suppressor', 'Finds harsh resonances and pulls them down as they ring. Draw where it should work harder, and use Delta to hear what it takes out.'],
+  ['resonance_suppressor', 'Resonance Suppressor', 'Finds harsh resonances and pulls them down as they ring. Draw where it should work harder, and use Delta to hear what it takes out.'],
   ['compressor', 'Compressor', 'Evens out the level. The curve shows your settings, and the dot and the bar show how hard it is working right now.'],
   ['enveloper', 'Enveloper', 'Reshapes every hit: more or less attack, and a longer or shorter ring-out.'],
   ['sidechain', 'Sidechain', 'Ducks the sound on every trigger, with eight curves to choose from. It can work on the bass alone.'],
   ['distortion', 'Distortion', 'Four kinds of dirt, from warm to rude: Overdrive, Fuzz, Rectifier and Foldback.'],
   ['flanger', 'Flanger', 'A sweeping comb of notches. You watch them slide across the sound as the delay moves.'],
   ['phaser', 'Phaser', 'One to six moving notches that sweep through the sound, drawn as they happen.'],
-  ['rotor', 'Rotor Cabinet', 'The horn and drum of a rotary speaker, spinning slow or fast.'],
+  ['rotor_cabinet', 'Rotor Cabinet', 'The horn and drum of a rotary speaker, spinning slow or fast.'],
   ['delay', 'Delay', 'Echoes of up to two seconds, with feedback and tone. Each bar is an echo.'],
   ['stereo_delay', 'Stereo Delay', 'Left and right each get a time of their own, with feedback, tone and crossfeed.'],
   ['reverb', 'Reverb', 'Space with up to 12 seconds of decay, plus size, damping and predelay.'],
@@ -99,13 +49,13 @@ const FX = [
   ['hard_clipper', 'Hard Clipper', 'Cuts the peaks flat at the ceiling, for loudness with an edge.'],
   ['limiter', 'Limiter', 'Holds your level under the ceiling. Red shows what goes over, and the bar how much is held back.'],
 ];
-const fxItems = FX.map(([k, n, text]) => ({ src: `fx/${k}.jpg`, name: n, text }));
+const fxItems = FX.map(([k, n, text]) => ({ src: `fx/${k}.webp?v=5`, name: n, text }));
 const pile = $('pile');
-pile.innerHTML = FX.map(([k, n], i) => `<button class="fxc" data-i="${i}" aria-label="${n}"><img src="fx/${k}.jpg" alt="${n} window" loading="lazy"></button>`).join('');
+pile.innerHTML = FX.map(([k, n], i) => `<button class="fxc" data-i="${i}" aria-label="${n}"><img src="fx/${k}.webp?v=5" alt="${n} window" loading="lazy"></button>`).join('');
 pile.addEventListener('click', e => { const c = e.target.closest('.fxc'); if (c) openBox(fxItems, +c.dataset.i); });
 const noise = i => { const v = Math.sin(i * 12.9898 + 4.1) * 43758.5453; return v - Math.floor(v); };
 function layPile() {
-  const w = pile.clientWidth, narrow = w < 620, cols = narrow ? 3 : 5, rows = Math.ceil(15 / cols), cw = w * (narrow ? .54 : .3), ch = cw * .4;
+  const w = pile.clientWidth, narrow = w < 620, cols = narrow ? 3 : 5, rows = Math.ceil(15 / cols), cw = w * (narrow ? .54 : .3), ch = cw * .64;
   const height = narrow ? rows * ch * 1.02 + ch * 1.5 : rows * ch * 1.42 + ch * 1.1;
   pile.style.setProperty('--ph', Math.round(height) + 'px');
   pile.style.setProperty('--cw', Math.round(cw) + 'px');
@@ -125,12 +75,12 @@ layPile(); addEventListener('resize', layPile);
 new IntersectionObserver((l, o) => { if (l[0].isIntersecting) { pile.classList.add('in'); o.disconnect(); setTimeout(() => [...pile.children].forEach(c => c.style.transitionDelay = '0s'), 1500); } }, { threshold: .18 }).observe(pile);
 
 // The same window six times along an arc, with the colours travelling through all of them.
-const hues = ['Red','Orange','Yellow','Green','Blue','Violet'], colourItems = hues.map((n, i) => ({ src: `fx/colour_${i + 1}.jpg`, name: n }));
+const hues = ['Red','Orange','Yellow','Green','Blue','Violet'], colourItems = hues.map((n, i) => ({ src: `fx/colour_${i + 1}.jpg?v=4`, name: n }));
 const fan = $('fan');
-fan.innerHTML = hues.map((n, i) => `<button class="fc" data-i="${i}" aria-label="An effect window in many colors">${hues.map((c, k) => `<img src="fx/colour_${k + 1}.jpg" alt="" class="${k === i ? 'on' : ''}">`).join('')}</button>`).join('');
+fan.innerHTML = hues.map((n, i) => `<button class="fc" data-i="${i}" aria-label="An effect window in many colors">${hues.map((c, k) => `<img src="fx/colour_${k + 1}.jpg?v=4" alt="" class="${k === i ? 'on' : ''}">`).join('')}</button>`).join('');
 fan.addEventListener('click', e => { const c = e.target.closest('.fc'); if (c) openBox(colourItems, (+c.dataset.i + colourTick) % 6); });
 function layFan() {
-  const w = fan.clientWidth, narrow = w < 620, cw = w * (narrow ? .44 : .3), ch = cw * .445, step = cw * (narrow ? .26 : .46);
+  const w = fan.clientWidth, narrow = w < 620, cw = w * (narrow ? .44 : .3), ch = cw * .64, step = cw * (narrow ? .26 : .46);
   fan.style.setProperty('--fw', Math.round(cw) + 'px');
   let lowest = 0;
   [...fan.children].forEach((c, i) => {
@@ -155,7 +105,7 @@ setInterval(() => {
 const hitFrames = pad => ['padframe', 'ftall', 'fwide'].map($).forEach(f => { if (onScreen(f) && f.contentWindow) f.contentWindow.postMessage({ hit: pad }, '*'); });
 const chips = (el, names, chosen, pick) => { el.innerHTML = names.map((n, i) => `<button class="${i === chosen ? 'on' : ''}">${n}</button>`).join(''); [...el.children].forEach((b, i) => b.onclick = () => { [...el.children].forEach(c => c.classList.remove('on')); b.classList.add('on'); pick(i); }); };
 chips($('animchips'), ['Orbit','Ripple','Sparks','Meter','Dither','Scan'], 5, i => $('padframe').contentWindow.postMessage({ anim: i }, '*'));
-const PSK = [['3d_graphit','Graphite'],['3d_camouflage','Camo'],['3d_steel','Steel'],['3d_kawaii','Kawaii'],['3d_petrol','Petrol'],['3d_clear','Clear']];
+const PSK = [['3d_graphit','Graphite'],['3d_camouflage','Camo'],['3d_steel','Steel'],['3d_kawaii','Lollipop'],['3d_petrol','Petrol']];
 chips($('padskins'), PSK.map(s => s[1]), 0, i => $('padframe').contentWindow.postMessage({ skin: PSK[i][0] }, '*'));
 const KEYS = ['5','6','7','8','R','T','Z','U','F','G','H','J','C','V','B','N'];
 addEventListener('keydown', e => { if (e.repeat || e.metaKey || e.ctrlKey || box.classList.contains('on') || !onScreen($('padframe'))) return; const i = KEYS.indexOf(e.key.toUpperCase()); if (i >= 0) hitFrames(i); });
@@ -167,7 +117,7 @@ function fitFrames() {
 addEventListener('resize', fitFrames); fitFrames();
 
 // The two phones go through the skins by themselves, and the piano plays a little.
-const PHONE_SKINS = ['3d_camouflage', '3d_petrol', '3d_kawaii', '3d_graphit', '3d_steel', '3d_clear'];
+const PHONE_SKINS = ['3d_camouflage', '3d_petrol', '3d_kawaii', '3d_graphit', '3d_steel'];
 let phoneSkin = 0;
 setInterval(() => {
   if (still || !onScreen($('ptall'))) return;
@@ -187,149 +137,31 @@ setInterval(() => {
   w.postMessage({ key: tuneDown, down: true }, '*');
 }, 300);
 
-// ---- Sequencer and piano roll: tracks that live in the roll are left alone in the grid --------------------------------------------
+// ---- The beat the pads above play along to ----------------------------------------------------------------------------------
+let beat = 0;
 const NAMES = ['Kick','FX','Perc','808','Snare','Vox','Rim','Snare 2','Closed Hat','FX 2','Open Hat','Crash','Chop','Vox 2','Vox 3','Perc 2'];
 const STEPS = 32;
 const notes = (() => { const n = {}; const add = (p, list, pitch = 0) => (n[p] = n[p] || []).push(...list.map(s => ({ s, pitch })));
   add(0, [0, 10, 16, 26]); add(3, [0, 6, 16, 22], -12); add(4, [8, 24]); add(7, [8, 24]);
   add(8, Array.from({ length: 32 }, (_, i) => i)); add(10, [6, 14, 22, 30]); add(11, [0]); add(14, [4, 20], 3); add(12, [12, 28]);
   return n; })();
-const INROLL = new Set([3, 8, 14]);
-let rollPad = 0, shownStep = -1;
-const seqC = $('seq'), rollC = $('roll');
-const ROW = 25.5, LABEL = 96, RH = 12, KEYW = 44, TOPP = 14, BOTP = -19;
-function setup(c, h) { const dpr = Math.min(2, devicePixelRatio || 1), w = c.clientWidth; if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); c.style.height = h + 'px'; } const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); return [g, w]; }
-const pitchName = p => ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'][(60 + p) % 12] + (Math.floor((60 + p) / 12) - 1);
-const isBlack = p => [1,3,6,8,10].includes((60 + p) % 12);
-function drawSeq() {
-  const [g, w] = setup(seqC, ROW * 16), cw = (w - LABEL) / STEPS;
-  g.fillStyle = '#101113'; g.fillRect(0, 0, w, ROW * 16);
-  g.font = '11px Helvetica, Arial, sans-serif'; g.textBaseline = 'middle';
-  for (let i = 0; i < 16; i++) {
-    const y = i * ROW;
-    if (i === rollPad) { g.fillStyle = 'rgba(255,255,255,.1)'; g.fillRect(0, y, LABEL, ROW); }
-    g.fillStyle = SK.text; g.fillText(KEYS[i], 7, y + ROW / 2 + .5);
-    g.fillStyle = 'rgba(232,233,235,.88)'; g.fillText(NAMES[i].toUpperCase(), 24, y + ROW / 2 + .5);
-    g.fillStyle = SK.edge; g.fillRect(LABEL, y + ROW - 1, w - LABEL, 1);
-  }
-  for (let s = 0; s <= STEPS; s++) { g.fillStyle = s % 16 === 0 ? '#9c9c9f' : s % 4 === 0 ? '#5e5e5f' : SK.edge; g.fillRect(LABEL + s * cw, 0, 1, ROW * 16); }
-  for (let i = 0; i < 16; i++) {
-    const inRoll = INROLL.has(i), list = notes[i] || [];
-    if (inRoll) { g.fillStyle = 'rgba(160,160,165,.3)'; g.fillRect(LABEL, i * ROW + 1, w - LABEL, ROW - 3); }
-    g.fillStyle = mixColour(SK.level1, SK.level2, i / 15);
-    for (const n of list) { if (inRoll) g.fillRect(LABEL + n.s * cw + 1, i * ROW + ROW * .55, Math.max(2, cw * .8), 2); else g.fillRect(LABEL + n.s * cw + 1, i * ROW + 1, cw - 1, ROW - 3); }
-  }
-  if (shownStep >= 0) { g.fillStyle = 'rgba(255,255,255,.75)'; g.fillRect(LABEL + shownStep * cw, 0, 1, ROW * 16); }
-}
-function drawRoll() {
-  const rows = TOPP - BOTP + 1, [g, w] = setup(rollC, rows * RH), cw = (w - KEYW) / STEPS;
-  g.fillStyle = '#101113'; g.fillRect(0, 0, w, rows * RH);
-  g.font = '10px Helvetica, Arial, sans-serif'; g.textBaseline = 'middle';
-  for (let p = TOPP; p >= BOTP; p--) {
-    const y = (TOPP - p) * RH, black = isBlack(p);
-    if (black) { g.fillStyle = 'rgba(255,255,255,.04)'; g.fillRect(KEYW, y, w - KEYW, RH); }
-    g.fillStyle = SK.edge; g.fillRect(KEYW, y, w - KEYW, 1);
-    g.fillStyle = black ? '#101113' : '#5e5e5f'; g.fillRect(0, y, KEYW - 1, RH - 1);
-    if (!black) { g.fillStyle = p === 0 ? SK.text : '#bdbdc0'; g.textAlign = 'right'; g.fillText(pitchName(p), KEYW - 5, y + RH / 2); g.textAlign = 'left'; }
-  }
-  for (let s = 0; s <= STEPS; s++) { g.fillStyle = s % 16 === 0 ? '#9c9c9f' : s % 4 === 0 ? '#5e5e5f' : SK.edge; g.fillRect(KEYW + s * cw, 0, 1, rows * RH); }
-  g.fillStyle = mixColour(SK.level1, SK.level2, rollPad / 15);
-  for (const n of notes[rollPad] || []) { if (n.pitch > TOPP || n.pitch < BOTP) continue; g.fillRect(KEYW + n.s * cw + 1, (TOPP - n.pitch) * RH + 1, cw - 1, RH - 2); }
-  if (shownStep >= 0) { g.fillStyle = 'rgba(255,255,255,.75)'; g.fillRect(KEYW + shownStep * cw, 0, 1, rows * RH); }
-}
-const redraw = () => { drawSeq(); drawRoll(); };
-function toggle(pad, s, pitch) { const l = notes[pad] = notes[pad] || [], i = l.findIndex(n => n.s === s && n.pitch === pitch); if (i >= 0) l.splice(i, 1); else l.push({ s, pitch }); redraw(); }
-seqC.addEventListener('click', e => {
-  const r = seqC.getBoundingClientRect(), x = e.clientX - r.left, y = clamp(Math.floor((e.clientY - r.top) / ROW), 0, 15);
-  if (x < LABEL) { rollPad = y; $('rollname').textContent = NAMES[y]; redraw(); return; }
-  if (INROLL.has(y)) return;
-  toggle(y, clamp(Math.floor((x - LABEL) / ((r.width - LABEL) / STEPS)), 0, STEPS - 1), 0);
-});
-seqC.addEventListener('mousemove', e => { const r = seqC.getBoundingClientRect(), x = e.clientX - r.left, y = Math.floor((e.clientY - r.top) / ROW); seqC.style.cursor = x < LABEL || !INROLL.has(y) ? 'pointer' : 'default'; });
-rollC.addEventListener('click', e => { const r = rollC.getBoundingClientRect(), x = e.clientX - r.left, p = TOPP - Math.floor((e.clientY - r.top) / RH); if (x < KEYW) return; toggle(rollPad, clamp(Math.floor((x - KEYW) / ((r.width - KEYW) / STEPS)), 0, STEPS - 1), p); });
-addEventListener('resize', redraw); redraw();
-
-// ---- Output display and the dancing man -------------------------------------------------------------------------------------------
-const visual = new Visual(), pic = $('vis'), pg = pic.getContext('2d');
-let vStyle = 0, vClip = -1, clipData = null, danceData = null, beat = 0, level = 0;
-$('dances').innerHTML = DANCES.map(d => `<figure class="dance"><canvas></canvas><figcaption>${d}</figcaption></figure>`).join('');
-const danceCanvases = [...$('dances').querySelectorAll('canvas')].map(c => ({ c, g: c.getContext('2d') }));
-$('vstyle').onchange = async e => { const i = e.target.selectedIndex; if (i < 4) { vStyle = i; vClip = -1; } else { vClip = i - 4; clipData = null; const data = await loadBin(CLIPS[vClip]); if (vClip === i - 4) clipData = data; } };
-const col = t => mixColour(SK.level1, SK.level2, t);
-function fitCanvas(c) { const dpr = Math.min(2, devicePixelRatio || 1), w = c.clientWidth, h = c.clientHeight; if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); } return dpr; }
-function drawOutput() {
-  const dpr = fitCanvas(pic);
-  pg.setTransform(dpr, 0, 0, dpr, 0, 0); pg.clearRect(0, 0, pic.clientWidth, pic.clientHeight);
-  if (vClip >= 0 && clipData) paintClip(pg, pic.clientWidth, pic.clientHeight, clipData, beat, col);
-  else if (vClip < 0) visual.paint(pg, pic.clientWidth, pic.clientHeight, vStyle, +$('vsize').value, col);
-}
-function drawDancers() {
-  if (!danceData) return;
-  danceCanvases.forEach(({ c, g }, i) => {
-    const dpr = fitCanvas(c), w = c.clientWidth, h = c.clientHeight;
-    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
-    paintDancer(g, w, h, danceData, i, beat, '#E8E9EB');
-  });
-}
-loadBin('dancers').then(d => danceData = d);
-
-// ---- The price: the visualizer runs inside its letters, and only there -------------------------------------------------------------
-const priceHead = heads.find(o => o.h.id === 'big'), priceFill = document.createElement('canvas');
-priceFill.className = 'fill'; priceHead.h.appendChild(priceFill);
-const priceBars = new Visual(), priceG = priceFill.getContext('2d'), priceCol = t => mixColour('#7fe3cf', '#b9a8ff', t);
-function drawPrice() {
-  const h = priceHead.h;
-  if (priceHead.last !== 1) { h.classList.remove('live'); priceFill.style.display = 'none'; return; }
-  h.classList.add('live'); priceFill.style.display = 'block';
-  const dpr = Math.min(2, devicePixelRatio || 1), W = h.clientWidth, H = h.clientHeight, box = h.getBoundingClientRect();
-  if (priceFill.width !== Math.round(W * dpr) || priceFill.height !== Math.round(H * dpr)) { priceFill.width = Math.round(W * dpr); priceFill.height = Math.round(H * dpr); }
-  const g = priceG, st = getComputedStyle(h);
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, W, H);
-  g.fillStyle = 'rgba(245,245,247,.62)'; g.fillRect(0, 0, W, H);
-  // The same blocks as the visualizer, reaching up through the whole height of the letters.
-  const t = performance.now() / 1000, bars = priceBars.bars;
-  for (let i = 0; i < bars.length; i++) {
-    const want = Math.min(1, (.3 + .62 * Math.abs(Math.sin(i * 1.7 + t * 3.1) * Math.sin(i * .61 - t * 1.9))) * (.62 + level * .75));
-    bars[i] = Math.max(want, bars[i] * .9);
-  }
-  priceBars.paint(g, W, H, 0, W < 500 ? 4 : 6, priceCol);
-  g.globalCompositeOperation = 'destination-in';
-  const layer = priceText(W, H, dpr, st, box);
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  g.drawImage(layer, 0, 0);
-  g.globalCompositeOperation = 'source-over';
-}
-const textLayer = document.createElement('canvas');
-function priceText(W, H, dpr, st, box) {
-  if (textLayer.width !== Math.round(W * dpr) || textLayer.height !== Math.round(H * dpr) || textLayer.dataset.font !== st.fontSize) {
-    textLayer.width = Math.round(W * dpr); textLayer.height = Math.round(H * dpr); textLayer.dataset.font = st.fontSize;
-    const t = textLayer.getContext('2d');
-    t.setTransform(dpr, 0, 0, dpr, 0, 0); t.fillStyle = '#fff';
-    writeWords(t, priceHead.spans, box, st);
-  }
-  return textLayer;
-}
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { textLayer.dataset.font = ''; });
+// ---- Output display and the dancing man, recorded in the app -----------------------------------------------------------------------
+$('vstyle').onchange = e => { $('vis').src = `rec/vis_${e.target.value}.webp?v=4`; };
+const DANCE_LIST = [['floss','Floss'],['dab','Dab'],['whip','Whip'],['orange_justice','Orange Justice'],['gangnam','Gangnam'],['renegade','Renegade'],['macarena','Macarena'],['jerk','Jerk'],['shuffle','Shuffle'],['popping','Popping'],['krump','Krump'],['headspin','Headspin'],['freeze','Freeze']];
+$('dances').innerHTML = DANCE_LIST.map(([k, n]) => `<figure class="dance"><img src="rec/dance_${k}.webp?v=4" alt="${n}" loading="lazy"><figcaption>${n}</figcaption></figure>`).join('');
 
 // ---- The one clock of all that moves --------------------------------------------------------------------------------------------
 let last = performance.now(), lastStep = -1;
 function loop(now) {
   requestAnimationFrame(loop);
   const dt = Math.min(.05, (now - last) / 1000); last = now;
-  if (still) { if (lastStep < 0) { lastStep = 0; drawOutput(); drawDancers(); } return; }
-  const seqSeen = onScreen($('daw')), padSeen = onScreen($('padframe')), outSeen = onScreen($('outp')), manSeen = onScreen($('dances')), priceSeen = onScreen(priceHead.h);
-  if (!seqSeen && !padSeen && !outSeen && !manSeen && !priceSeen && !onScreen($('ptall'))) return;
+  const padSeen = onScreen($('padframe'));
+  if (still || (!padSeen && !onScreen($('ptall')))) return;
   beat += dt * TEMPO / 60;
   const step = Math.floor(beat * 4) % STEPS;
   if (step !== lastStep) {
     lastStep = step;
-    for (let p = 0; p < 16; p++) for (const n of notes[p] || []) if (n.s === step) { if (p !== 8) hitFrames(p); if (p === 0 || p === 4) level = 1; else level = Math.max(level, .35); }
-    if (seqSeen) { shownStep = step; redraw(); }
+    for (let p = 0; p < 16; p++) for (const n of notes[p] || []) if (n.s === step) { if (p !== 8) hitFrames(p); }
   }
-  level *= Math.exp(-dt / .16);
-  if (outSeen) { visual.step(dt, null, null, null, level, now / 1000); drawOutput(); }
-  if (priceSeen) drawPrice();
-  if (manSeen) drawDancers();
 }
 requestAnimationFrame(loop);

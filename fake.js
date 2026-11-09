@@ -9,10 +9,10 @@
   const say = text => self && self.onmessage && self.onmessage({ data: text });
   async function look() {
     const layoutUrl = form === 'pad' ? `phone/${skin}_pad.json` : `phone/${skin}_layout.json`;
-    const [s, l, p] = await Promise.all([`phone/${skin}.json`, layoutUrl, `phone/${skin}_piano.json`].map(u => fetch(u).then(r => r.json())));
+    const [s, l, p] = await Promise.all([`phone/${skin}.json`, layoutUrl, `phone/${skin}_piano.json`].map(u => fetch(u + "?v=6").then(r => r.json())));
     fx = s.effects;
     const stem = form === 'pad' ? `${skin}_pad` : skin;
-    say(JSON.stringify({ t: 'look', skin: s, layout: l, pianoLayout: p, up: `phone/${stem}_up.jpg`, down: `phone/${stem}_down.jpg`, piano: `phone/${skin}_piano.jpg` }));
+    say(JSON.stringify({ t: 'look', skin: s, layout: l, pianoLayout: p, up: `phone/${stem}_up.jpg?v=6`, down: `phone/${stem}_down.jpg?v=6`, piano: `phone/${skin}_piano.jpg?v=6` }));
     state();
   }
   function state() { say(JSON.stringify({ t: 'state', page, anim, target: 'Kick', names: all, lights: lights(), muted: [] })); }

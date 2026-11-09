@@ -1,18 +1,24 @@
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from './lib/RoundedBoxGeometry.js';
 import { mergeGeometries } from './lib/BufferGeometryUtils.js';
-import { EFFECTS, newState, stepState, paintEffect, Visual, loadBin, paintDancer, paintClip, CLIPS, mixColour } from './live.js?v=3';
 
+// The skins in the order of the app: key, name, colour of the case, and the two colours of its level meters.
 const SKINS = [
- ['3d_camouflage','Camouflage',0x25261a,.35,.62],['3d_graphit','Graphite',0x1a1a1d,.65,.42],['3d_steel','Brushed Steel',0x8f908e,1,.36],['3d_clear','Transparent Tech',0xaab3ae,.2,.22],
- ['3d_kawaii','Kawaii',0xe9bccd,.05,.5],['3d_petrol','Petrol',0x13272d,.55,.45],['3d_gold','Champagne',0xb3a68c,.9,.34],['3d_desert','Desert',0x4a3c27,.3,.6],['3d_urban','Urban',0x2f3134,.4,.55],
- ['3d_snow','Snow',0x4c5157,.35,.55],['3d_terrakotta','Terracotta',0x35241d,.5,.46],['3d_salbei','Sage',0xa9b29d,.4,.48],['3d_hellgrau','Light Gray',0xbcbcb9,.5,.42],['3d_comic','Mustard & Navy',0x1a2438,.5,.46],
- ['graphit','2D Graphite',0x0b0b0d,.6,.45],['terrakotta','2D Terracotta',0x1e1511,.5,.5],['salbei','2D Sage',0x98a18d,.4,.5],['hellgrau','2D Light Gray',0xaeaeb2,.5,.44],['gold','2D Champagne',0xa89b82,.8,.38],['petrol','2D Petrol',0x0e1a1e,.55,.46],['comic','2D Mustard & Navy',0x0d121d,.5,.48],
-].map(([key,name,body,metal,rough])=>({key,name,body,metal,rough}));
+ ['3d_graphit','Graphite',0x232326,'#58b3a1','#8a80c4'],['3d_terrakotta','Terracotta',0x3b2a23,'#d8915f','#e3c07a'],['3d_salbei','Sage',0xcdd5c1,'#7ac9a0','#9cc8e8'],
+ ['3d_hellgrau','Light Gray',0xd7d7d4,'#52c7a3','#72aeea'],['3d_gold','Champagne',0xdccfb6,'#e0b65a','#eddcbd'],['3d_petrol','Petrol',0x1f3a43,'#62bccf','#dcae5a'],
+ ['3d_comic','Mustard & Navy',0x1f2a42,'#d2a040','#ec8097'],['3d_camouflage','Camouflage',0x4c4f30,'#9eb35a','#d9c27a'],['3d_desert','Desert',0x6a5638,'#d2a860','#e8d8a8'],
+ ['3d_urban','Urban',0x4a4c50,'#74b6c8','#c8ccd0'],['3d_snow','Snow',0x565b61,'#7cc4dc','#c8d8e4'],['3d_camo_pink','Pink Camouflage',0x5e2f45,'#ff8fbf','#ffd0e2'],
+ ['3d_steel','Brushed Steel',0xa6a7a5,'#58b3a1','#8a80c4'],['3d_kawaii','Lollipop',0xf9dbe8,'#ff9cc8','#9cd8ff'],['3d_phosphor','Phosphor',0x0d1a10,'#3ddc74','#b8ffd0'],
+ ['3d_pixel_woodland','Pixel Woodland',0x4c4f30,'#9eb35a','#d9c27a'],['3d_pixel_desert','Pixel Desert',0x6a5638,'#d2a860','#e8d8a8'],['3d_pixel_urban','Pixel Urban',0x4a4c50,'#74b6c8','#c8ccd0'],
+ ['3d_pixel_arctic','Pixel Arctic',0x565b61,'#7cc4dc','#c8d8e4'],['3d_pixel_pink','Pixel Pink',0x5e2f45,'#ff8fbf','#ffd0e2'],['3d_bauhaus','Bauhaus',0xefe9dc,'#5a8ae0','#f2c230'],
+ ['3d_dot_matrix','Dot Matrix',0xd0ccc4,'#306230','#9bbc0f'],['3d_blueprint','Blueprint',0x134f8c,'#e8f2ff','#8fd0ff'],
+ ['graphit','2D Graphite',0x050506,'#58b3a1','#8a80c4'],['terrakotta','2D Terracotta',0x130e0c,'#d8915f','#e3c07a'],['salbei','2D Sage',0xb3bca8,'#7ac9a0','#9cc8e8'],
+ ['hellgrau','2D Light Gray',0xbdbdc1,'#52c7a3','#72aeea'],['gold','2D Champagne',0xbcae94,'#e0b65a','#eddcbd'],['petrol','2D Petrol',0x0a1417,'#62bccf','#dcae5a'],
+ ['comic','2D Mustard & Navy',0x090d15,'#d2a040','#ec8097'],
+].map(([key,name,body,level1,level2])=>({key,name,body,level1,level2,metal:key.startsWith('3d_')?.45:.3,rough:.5}));
 const COUNT = SKINS.length;
 
 // ---- The list of skins and the logo ----------------------------------------------------------------------------
-document.getElementById('skins').innerHTML = SKINS.map((s, i) => `<figure data-skin="${i}"><img src="thumbs/${s.key}.jpg" alt="${s.name} skin" loading="lazy"><figcaption>${s.name}</figcaption></figure>`).join('');
+document.getElementById('skins').innerHTML = SKINS.map((s, i) => `<figure data-skin="${i}"><img src="thumbs/${s.key}.jpg?v=4" alt="${s.name} skin" loading="lazy"><figcaption>${s.name}</figcaption></figure>`).join('');
 
 const spinEl = document.getElementById('spin');
 const sprite = new Image();
@@ -37,14 +43,27 @@ sprite.src = 'logo/cy_spin.png';
 const still = matchMedia('(prefers-reduced-motion:reduce)').matches;
 
 // ---- The machines ------------------------------------------------------------------------------------------------
-const PX = 2000, PY = 1170, W = PX / 100, D = PY / 100;
+// The window of the app in its design points (the pictures are twice as sharp), 66 points to one unit.
+const PX = 1320, PY = 820, U = 66, W = PX / U, D = PY / U;
+// Where the app has its parts, as the app itself reports them (build/siteflow/layout.json).
+const KEYS = [[1154,204,1174,224],[917,209,927,219],[1226,203,1282,225],[1190,248,1210,268],[1262,248,1282,268],[1164,248,1186,268],[917,253,927,263],[1210,282,1286,302],[1064,467,1144,491],[902,53,982,75],[1219,53,1307,75],[304,54,330,78],[333,54,411,78],[13,465,69,489],[1256,797,1314,817],[829,542,901,566],[901,542,957,566],[709,542,737,566],[737,542,765,566],[765,542,793,566],[793,542,821,566],[34,503,144,529],[150,503,240,529],[246,503,310,529],[1126,503,1210,529],[233,7,263,39],[267,7,297,39],[301,7,331,39],[335,7,365,39],[369,7,399,39],[403,7,433,39],[437,7,467,39],[475,7,569,39],[1150,7,1180,39],[1082,7,1112,39],[1116,7,1146,39],[1184,7,1214,39],[1226,7,1300,39],[316,503,396,529],[1042,503,1122,529],[1214,503,1286,529]];
+const PADS = [[469,108,559,198],[565,108,655,198],[661,108,751,198],[757,108,847,198],[469,204,559,294],[565,204,655,294],[661,204,751,294],[757,204,847,294],[469,300,559,390],[565,300,655,390],[661,300,751,390],[757,300,847,390],[469,396,559,486],[565,396,655,486],[661,396,751,486],[757,396,847,486]];
+const GRIPS = [[1131,56,1141,72],[363.3,469,373.3,485],[454,508,464,524]];
+const RAILS = [[1131,53,1211,75],[79,465,414,489],[454,503,564,529]];
+// The screens of the machine, measured on the app's window: position, tempo, bar, level, output, dancer, the effect chain,
+// the library with its search field and wave, the pattern and the piano roll.
+const SCREENS = [[614,3,694,41],[696,3,776,41],[778,3,832,41],[877,7,1037,37],[902,81,1244,143],[1245,81,1307,143],[906,193,1296,460],
+  [14,122,412,385],[14,88,412,113],[14,416,412,458],[52,540,630,765],[676,580,1256,765]];
+const GLASS = [[614,3,694,41],[696,3,776,41],[778,3,832,41],[877,7,1037,37],[902,81,1244,143],[1245,81,1307,143]];
+
 const canvas = document.getElementById('c');
 const small = Math.min(innerWidth, innerHeight) < 700;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
 renderer.setClearColor(0x000000, 0);
 renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+// AgX keeps the colours of the skins truer than ACES, which pushes them towards yellow and grey.
+renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMappingExposure = .92;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -63,14 +82,18 @@ softbox(5, 24, -26, 9, 6, 4.5, 0xfff1e0);
 softbox(5, 24, 26, 8, 2, 3.2, 0xdce8ff);
 softbox(34, 2.4, 0, 7, 28, 5);
 softbox(24, 7, 0, 10, -28, 1.6, 0xbcd0ff);
+// A wide, soft window behind the machines: it is what the glossy faces mirror back towards the viewer.
+softbox(46, 16, 0, 20, -34, 2.6, 0xf4f6ff);
+softbox(8, 30, -14, 16, -30, 3.2);
+softbox(8, 30, 14, 16, -30, 3.2);
 scene.environment = pmrem.fromScene(studio, .012).texture;
-scene.environmentIntensity = .85;
+scene.environmentIntensity = 1.6;
 const camera = new THREE.PerspectiveCamera(24, 1, 1, 260);
 
 const key = new THREE.DirectionalLight(0xfff3e6, 2.0);
 key.position.set(-9, 22, 14);
 key.castShadow = true;
-key.shadow.mapSize.set(small ? 1024 : 2048, small ? 1024 : 2048);
+key.shadow.mapSize.set(small ? 1024 : 4096, small ? 1024 : 4096);
 Object.assign(key.shadow.camera, { left: -17, right: 17, top: 13, bottom: -13, near: 1, far: 60 });
 key.shadow.bias = -.0004;
 key.shadow.radius = 5;
@@ -78,39 +101,51 @@ scene.add(key);
 const rim = new THREE.DirectionalLight(0x9ebcff, 1.1);
 rim.position.set(12, 8, -16);
 scene.add(rim);
+// Light that bounces off the floor and the room, so the shadows are never dead black.
+scene.add(new THREE.HemisphereLight(0xdfe6ff, 0x1a1712, .35));
 
-const X = p => p / 100 - W / 2, Z = p => p / 100 - D / 2;
+const X = p => p / U - W / 2, Z = p => p / U - D / 2;
 
 // A raised part: its top carries that piece of the picture, its sides the darkened edge of it.
-function raisedGeometry(x0, y0, x1, y1, height, radius) {
-  const w = (x1 - x0) / 100, d = (y1 - y0) / 100;
-  const geo = new RoundedBoxGeometry(w, height, d, 3, Math.min(radius, height * .48)).toNonIndexed();
+// The face of a key as the app draws it (Hardware.cpp keyFace and chamferFor): a little in from its bounds, its corners cut off.
+function faceOf(x0, y0, x1, y1) {
+  if (x1 - x0 < 14 || y1 - y0 < 14) return [x0, y0, x1 - 1, y1 - 1, 0];
+  const f = [x0 + 1, y0, x1 - 2, y1 - 3], side = Math.min(f[2] - f[0], f[3] - f[1]);
+  return [...f, side >= 16 ? Math.min(7, Math.round(side * .24)) : 0];
+}
+// A raised part: an octagon like the face in the app, its top carrying that piece of the picture, its sides the darkened edge of it.
+function raisedGeometry(bx0, by0, bx1, by1, height) {
+  const [x0, y0, x1, y1, cut] = faceOf(bx0, by0, bx1, by1);
+  const w = (x1 - x0) / U, d = (y1 - y0) / U, bevel = Math.min(.008, height * .2), c = Math.min(cut / U, w / 2, d / 2);
+  const hw = w / 2 - bevel, hd = d / 2 - bevel, cc = Math.max(0, c - bevel * .41), shape = new THREE.Shape();
+  shape.moveTo(-hw + cc, -hd); shape.lineTo(hw - cc, -hd); shape.lineTo(hw, -hd + cc); shape.lineTo(hw, hd - cc);
+  shape.lineTo(hw - cc, hd); shape.lineTo(-hw + cc, hd); shape.lineTo(-hw, hd - cc); shape.lineTo(-hw, -hd + cc); shape.closePath();
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: height - bevel * 2, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2, curveSegments: 1 })
+    .rotateX(-Math.PI / 2).translate(0, bevel, 0).toNonIndexed();
+  geo.computeVertexNormals();
   const pos = geo.attributes.position, nor = geo.attributes.normal, uv = geo.attributes.uv, tone = new Float32Array(pos.count * 3);
   for (let i = 0; i < pos.count; i++) {
-    // Only the top carries the picture. The sides take one plain spot of it, so no writing is smeared down them.
-    const top = nor.getY(i) > .85;
-    uv.setXY(i, top ? (x0 + (pos.getX(i) / w + .5) * (x1 - x0)) / PX : (x0 + 4) / PX, top ? 1 - (y0 + (pos.getZ(i) / d + .5) * (y1 - y0)) / PY : 1 - (y1 - 4) / PY);
-    const t = top ? 1 : .4;
+    // Only the top carries the picture. The sides take one plain spot of it, so no writing is smeared down them,
+    // and they darken towards the foot, where little light reaches.
+    const top = nor.getY(i) > .7;
+    uv.setXY(i, top ? (x0 + (pos.getX(i) / w + .5) * (x1 - x0)) / PX : (x0 + 2) / PX, top ? 1 - (y0 + (pos.getZ(i) / d + .5) * (y1 - y0)) / PY : 1 - (y1 - 2) / PY);
+    const t = top ? 1 : .28 + .4 * Math.min(1, pos.getY(i) / height);
     tone.set([t, t, t], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(tone, 3));
-  geo.translate(X((x0 + x1) / 2), height / 2, Z((y0 + y1) / 2));
+  geo.translate(X((x0 + x1) / 2), 0, Z((y0 + y1) / 2));
   return geo;
 }
 
-const KEYS = [
- [678,9,712,41],[721,9,770,41],[779,9,815,41],[824,9,860,41],[869,9,905,41],[914,9,950,41],[960,9,996,41],[1003,9,1041,41],
- [1740,9,1774,40],[1783,9,1851,40],[1860,9,1896,40],[1905,9,1982,40],[523,63,548,87],[556,62,641,87],
- [713,91,799,114],[810,91,896,114],[907,91,993,114],[1004,91,1090,114],[1101,91,1187,114],[1198,91,1286,114],
- [1695,60,1780,84],[1875,60,1985,84],[1822,181,1870,204],[1877,181,1902,204],[1908,181,1983,204],[16,677,78,700],
- [1873,268,1957,292],[15,725,50,751],[56,725,93,751],[107,725,226,751],[966,725,992,751],[1006,725,1032,751],[1040,725,1155,751],
- [1776,725,1868,751],[1875,725,1955,751],[1965,725,1992,751],[1327,772,1355,798],[1360,772,1388,798],[1393,772,1420,798],[1424,772,1452,798],
- [1465,772,1543,798],[1550,772,1606,798],[1613,772,1678,798],[1690,772,1763,798],[1773,772,1858,798],[1873,772,1903,798],[1909,772,1938,798],[1943,772,1972,798],[1932,1142,1988,1162],
-];
-const keysGeo = mergeGeometries(KEYS.map(k => raisedGeometry(...k, .11, .04)));
-const PADX = [713,859,1005,1151], PADY = [126,272,418,564];
-const padGeos = [];
-PADY.forEach(y => PADX.forEach(x => padGeos.push(raisedGeometry(x + 5, y + 5, x + 133, y + 133, .26, .07))));
+// The keys of the effect cards are left flat: every machine plays its own effect, so they sit elsewhere on each one.
+const CHAIN = [900, 190, 1300, 465];
+function raisedKeysAll() { return raisedKeys; }
+const raisedKeys = KEYS.filter(([x0, y0, x1, y1]) => !(x0 >= CHAIN[0] && y0 >= CHAIN[1] && x1 <= CHAIN[2] && y1 <= CHAIN[3]));
+const keysGeo = mergeGeometries(raisedKeys.map(([x0, y0, x1, y1]) => raisedGeometry(x0, y0, x1, y1, .1)));
+const padGeos = PADS.map(([x0, y0, x1, y1]) => raisedGeometry(x0, y0, x1, y1, .26));
+// The rails the fader grips run in, cut into the face as narrow slots.
+const slotGeo = mergeGeometries(RAILS.map(([x0, y0, x1, y1]) => new THREE.BoxGeometry((x1 - x0 + 4) / U, .014, 3.5 / U).translate(X((x0 + x1) / 2), .006, Z((y0 + y1) / 2))));
+const faderGeo = mergeGeometries(GRIPS.map(([x0, y0, x1, y1]) => raisedGeometry(x0, y0, x1, y1, .16)));
 
 const MARGIN = .7, THICK = 1.7;
 // A pattern laid over from each side in turn, at one size everywhere, so nothing is stretched along an edge.
@@ -124,44 +159,77 @@ function boxMapped(geo) {
   }
   return geo;
 }
-const bodyGeo = boxMapped(new RoundedBoxGeometry(W + MARGIN * 2, THICK, D + MARGIN * 2, 6, .3));
-const seatGeo = new THREE.BoxGeometry(W + .14, .03, D + .14);
-const plateGeo = new THREE.PlaneGeometry(W, D);
+// The window of the app has its four corners cut off at an angle, 16 points along each edge (Main.cpp kCorner),
+// and so has every layer of the machine around it, the cut growing with each layer so the bands stay even.
+const CUT = 16 / U, cutAt = grow => CUT + grow * (Math.SQRT2 - 1);
+function octShape(hw, hd, c) {
+  const s = new THREE.Shape();
+  s.moveTo(-hw + c, -hd); s.lineTo(hw - c, -hd); s.lineTo(hw, -hd + c); s.lineTo(hw, hd - c);
+  s.lineTo(hw - c, hd); s.lineTo(-hw + c, hd); s.lineTo(-hw, hd - c); s.lineTo(-hw, -hd + c); s.closePath();
+  return s;
+}
+// A slab with that outline, centred on the origin, its edges rounded by bevel.
+function slab(grow, height, bevel, holeGrow = null) {
+  const shape = octShape(W / 2 + grow - bevel, D / 2 + grow - bevel, Math.max(0, cutAt(grow) - bevel * (Math.SQRT2 - 1)));
+  if (holeGrow !== null) shape.holes.push(octShape(W / 2 + holeGrow, D / 2 + holeGrow, cutAt(holeGrow)));
+  return new THREE.ExtrudeGeometry(shape, { depth: Math.max(.001, height - bevel * 2), bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 5, curveSegments: 1 })
+    .rotateX(-Math.PI / 2).translate(0, bevel - height / 2, 0);
+}
+const bodyGeo = boxMapped(slab(MARGIN, THICK, .12));
+const seatGeo = slab(.07, .03, 0);
+const plateGeo = (() => {
+  const g = new THREE.ShapeGeometry(octShape(W / 2, D / 2, CUT)), pos = g.attributes.position, uv = g.attributes.uv;
+  for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / W + .5, pos.getY(i) / D + .5);
+  return g;
+})();
 const footGeo = (() => {
   const parts = [[-1,-1,1.9],[1,-1,1.9],[-1,1,.65],[1,1,.65]].map(([x, z, h]) => new THREE.CylinderGeometry(.5, .56, h, 20).translate(x * (W / 2 - .5), -THICK - h / 2 + .06, z * (D / 2 - .5)));
   return mergeGeometries(parts);
 })();
-const screwGeo = mergeGeometries([[-1,-1],[1,-1],[-1,1],[1,1]].map(([x, z]) => new THREE.CylinderGeometry(.11, .125, .05, 18).translate(x * (W / 2 + MARGIN * .52), .004, z * (D / 2 + MARGIN * .52))));
-const KNOBS = [[1408,443,2.3],[1508,443,.1],[1609,443,-.8],[1710,443,2.4],[1810,443,2.3],[1911,443,-.4],[1432,678,.3],[1584,678,2.3],[1736,678,2.3],[1888,678,2.3]];
-function knobParts(radius) { return mergeGeometries(KNOBS.map(([x, y]) => mergeGeometries([new THREE.CylinderGeometry(radius * .84, radius, .12, 32).translate(0, .06, 0).toNonIndexed(), new THREE.CylinderGeometry(radius * .68, radius * .78, .24, 28).translate(0, .24, 0).toNonIndexed()]).translate(X(x), 0, Z(y)))); }
-const knobGeo = knobParts(.135);
-const capGeo = mergeGeometries(KNOBS.map(([x, y]) => new THREE.CylinderGeometry(.07, .08, .014, 24).translate(X(x), .37, Z(y))));
-const markGeo = mergeGeometries(KNOBS.map(([x, y, turn]) => new THREE.BoxGeometry(.022, .018, .09).translate(0, .38, -.05).rotateY(turn).translate(X(x), 0, Z(y))));
-const faderGeo = mergeGeometries([[574,690,.13,.28],[1796,73,.13,.24],[1673,738,.13,.24]].map(([x, y, w, d]) => new RoundedBoxGeometry(w, .16, d, 2, .03).toNonIndexed().translate(X(x), .08, Z(y))));
-const GLASS = [[1061,10,1156,42],[1161,10,1256,42],[1262,10,1322,42],[1559,10,1720,42],[1354,95,1908,165],[1915,95,1985,165],[17,101,648,130],[17,620,648,668],[168,777,962,1104],[1073,825,1957,1104],[1367,274,1957,405],[1367,545,1957,650]];
-const glassGeo = mergeGeometries(GLASS.map(([a, b, c, d]) => new THREE.PlaneGeometry((c - a) / 100, (d - b) / 100).rotateX(-Math.PI / 2).translate(X((a + c) / 2), .016, Z((b + d) / 2))));
+// Each screen as its own pane of glass, carrying that piece of the picture.
+const screenGeo = mergeGeometries(SCREENS.map(([a, b, c, d]) => {
+  const g = new THREE.PlaneGeometry((c - a) / U, (d - b) / U).rotateX(-Math.PI / 2), uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, (a + uv.getX(i) * (c - a)) / PX, 1 - (b + (1 - uv.getY(i)) * (d - b)) / PY);
+  return g.translate(X((a + c) / 2), .003, Z((b + d) / 2));
+}));
+// Up close, the fine grid of the pixels behind the glass.
+const raster = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 8;
+  const g = c.getContext('2d'); g.fillStyle = 'rgba(0,0,0,0)'; g.clearRect(0, 0, 8, 8); g.fillStyle = 'rgba(0,0,0,.9)'; g.fillRect(0, 7, 8, 1); g.fillRect(7, 0, 1, 8);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(PX / 1.5, PY / 1.5); t.anisotropy = 8; return t;
+})();
+const rasterGeo = (() => { const g = screenGeo.clone(), uv = g.attributes.uv; return g.translate(0, .001, 0); })();
+// Shadows worked out once: soft dark seams around every pad, key and grip, and the inner edge of every screen,
+// so the parts sit in the case and the screens lie a little deeper than the print.
+const seams = (() => {
+  const k = 2, c = document.createElement('canvas'); c.width = PX * k; c.height = PY * k;
+  const g = c.getContext('2d'); g.scale(k, k); g.fillStyle = '#fff'; g.fillRect(0, 0, PX, PY);
+  g.filter = 'blur(3px)'; g.fillStyle = 'rgba(0,0,0,.5)';
+  [...PADS, ...raisedKeysAll(), ...GRIPS].forEach(([x0, y0, x1, y1]) => g.fillRect(x0 - 1.5, y0 - .5, x1 - x0 + 3, y1 - y0 + 4));
+  g.filter = 'blur(2.5px)'; g.strokeStyle = 'rgba(0,0,0,.7)'; g.lineWidth = 6;
+  SCREENS.forEach(([x0, y0, x1, y1]) => { g.save(); g.beginPath(); g.rect(x0, y0, x1 - x0, y1 - y0); g.clip(); g.strokeRect(x0 - 2, y0 - 2, x1 - x0 + 4, y1 - y0 + 4); g.restore(); });
+  g.filter = 'none';
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+})();
+const seamMat = new THREE.MeshBasicMaterial({ map: seams, transparent: true, blending: THREE.MultiplyBlending, premultipliedAlpha: true, depthWrite: false, toneMapped: false });
+const rasterMat = new THREE.MeshBasicMaterial({ map: raster, transparent: true, opacity: .22, depthWrite: false });
+const glassGeo = mergeGeometries(GLASS.map(([a, b, c, d]) => new THREE.PlaneGeometry((c - a) / U, (d - b) / U).rotateX(-Math.PI / 2).translate(X((a + c) / 2), .016, Z((b + d) / 2))));
 
 // What only a real machine has: a metal rim around the face, a base plate, and sockets and vents in its front.
 const FRONT = D / 2 + MARGIN;
-const rimGeo = boxMapped(mergeGeometries([
-  new THREE.BoxGeometry(W + .34, .07, .11).translate(0, -.006, -D / 2 - .115), new THREE.BoxGeometry(W + .34, .07, .11).translate(0, -.006, D / 2 + .115),
-  new THREE.BoxGeometry(.11, .07, D + .12).translate(-W / 2 - .115, -.006, 0), new THREE.BoxGeometry(.11, .07, D + .12).translate(W / 2 + .115, -.006, 0),
-]));
-const baseGeo = new RoundedBoxGeometry(W + MARGIN * 2 - .28, .22, D + MARGIN * 2 - .28, 3, .08);
+const rimGeo = boxMapped(slab(.17, .07, .015, .06).translate(0, -.006, 0));
+const baseGeo = slab(MARGIN - .14, .22, .03);
 const ventGeo = mergeGeometries(Array.from({ length: 44 }, (_, i) => new THREE.BoxGeometry(.075, .3, .03).translate(-W / 2 + 1 + i * .17, -THICK * .52, FRONT + .003)));
 const socketGeo = mergeGeometries([0, 1, 2].flatMap(i => [new THREE.CylinderGeometry(.13, .13, .05, 24).rotateX(Math.PI / 2).translate(W / 2 - 1.1 - i * .62, -THICK * .52, FRONT)]));
 const holeGeo = mergeGeometries([0, 1, 2].map(i => new THREE.CylinderGeometry(.07, .07, .06, 16).rotateX(Math.PI / 2).translate(W / 2 - 1.1 - i * .62, -THICK * .52, FRONT + .006)));
 const ledGeo = new THREE.SphereGeometry(.045, 12, 8).translate(W / 2 - 3.2, -THICK * .52, FRONT + .004);
-const ringGeo = mergeGeometries(KNOBS.map(([x, y]) => new THREE.TorusGeometry(.145, .008, 8, 40).rotateX(Math.PI / 2).translate(X(x), .012, Z(y))));
 
 const blackMat = new THREE.MeshStandardMaterial({ color: 0x09090a, roughness: .7, metalness: .3 });
 const rubberMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: .9 });
 const screwMat = new THREE.MeshStandardMaterial({ color: 0x8a8a8c, metalness: 1, roughness: .32 });
-const knobMat = new THREE.MeshStandardMaterial({ color: 0x17171a, roughness: .38, metalness: .75 });
-const capMat = new THREE.MeshStandardMaterial({ color: 0x8c8c90, roughness: .3, metalness: 1 });
-const markMat = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: .4, emissive: 0xffffff, emissiveIntensity: .35 });
-const faderMat = new THREE.MeshStandardMaterial({ color: 0xb6b6b8, roughness: .35, metalness: .85 });
-const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: .03, transparent: true, opacity: .13, clearcoat: 1, clearcoatRoughness: .02, envMapIntensity: 2.6 });
+const PAD_LIGHT = .16;
+const slotMat = new THREE.MeshPhysicalMaterial({ color: 0x050506, roughness: .3, clearcoat: 1, clearcoatRoughness: .1 });
+const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: .02, transparent: true, opacity: .1, ior: 1.5, specularIntensity: 1, clearcoat: 1, clearcoatRoughness: .01, envMapIntensity: 3 });
 const ledMat = new THREE.MeshStandardMaterial({ color: 0x33ff88, emissive: 0x33ff88, emissiveIntensity: 2.4 });
 
 // Only so many machines exist, and they take on whichever skins are in view as the ring turns.
@@ -171,12 +239,49 @@ const FLOOR = -THICK - 1.0;
 const glowEl = document.getElementById('glow');
 const glowWanted = new THREE.Color(0x8a8a90);
 const STEP = Math.PI / 4.4, REACH = 2;      // Angle between neighbours, and how many are built to each side.
-const insideGeo = new THREE.BoxGeometry(W + MARGIN * 2 - .5, THICK * .55, D + MARGIN * 2 - .5).translate(0, -THICK * .55, 0);
-let insideShared = null;
-function insideMat() {
-  if (!insideShared) { const t = new THREE.TextureLoader().load('skins/inside_clear.jpg'); t.colorSpace = THREE.SRGBColorSpace; insideShared = new THREE.MeshStandardMaterial({ map: t, roughness: .55, metalness: .25 }); }
-  return insideShared;
+// A fine grain for the printed face: no real surface reflects perfectly evenly.
+const grain = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d'), img = g.createImageData(256, 256);
+  for (let i = 0; i < img.data.length; i += 4) { const v = 150 + Math.random() * 70; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(14, 9); return t;
+})();
+// Fine scratches in the clear lacquer, seen only where a light glances off it, and the grain of the rubber pads.
+function normalCanvas(size, draw) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d'); g.fillStyle = 'rgb(128,128,255)'; g.fillRect(0, 0, size, size); draw(g, size);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
 }
+const scratches = normalCanvas(512, (g, n) => {
+  for (let i = 0; i < 260; i++) {
+    const x = Math.random() * n, y = Math.random() * n, a = Math.random() * Math.PI, l = 8 + Math.random() * 60;
+    const nx = Math.round(128 + Math.cos(a + Math.PI / 2) * 70), ny = Math.round(128 + Math.sin(a + Math.PI / 2) * 70);
+    g.strokeStyle = `rgba(${nx},${ny},255,${.25 + Math.random() * .5})`; g.lineWidth = .6;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+  }
+});
+scratches.repeat.set(5, 3);
+const rubber = normalCanvas(256, (g, n) => {
+  const img = g.getImageData(0, 0, n, n);
+  for (let i = 0; i < img.data.length; i += 4) { img.data[i] = 128 + (Math.random() - .5) * 60; img.data[i + 1] = 128 + (Math.random() - .5) * 60; }
+  g.putImageData(img, 0, 0);
+});
+rubber.repeat.set(40, 25);
+// The fine stipple of moulded plastic: soft little bumps, not sharp noise.
+const stipple = normalCanvas(512, (g, n) => {
+  const h = document.createElement('canvas'); h.width = h.height = n;
+  const hg = h.getContext('2d'); hg.fillStyle = '#808080'; hg.fillRect(0, 0, n, n);
+  for (let i = 0; i < 9000; i++) { const v = Math.random() < .5 ? 40 : 215; hg.fillStyle = `rgba(${v},${v},${v},.35)`; hg.beginPath(); hg.arc(Math.random() * n, Math.random() * n, .8 + Math.random() * 1.6, 0, 7); hg.fill(); }
+  hg.filter = 'blur(1.2px)'; hg.drawImage(h, 0, 0); hg.filter = 'none';
+  const src = hg.getImageData(0, 0, n, n).data, img = g.getImageData(0, 0, n, n), at = (x, y) => src[(((y + n) % n) * n + ((x + n) % n)) * 4];
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const i = (y * n + x) * 4, dx = (at(x + 1, y) - at(x - 1, y)) / 255, dy = (at(x, y + 1) - at(x, y - 1)) / 255;
+    img.data[i] = 128 - dx * 127; img.data[i + 1] = 128 - dy * 127; img.data[i + 2] = 255; img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+});
+stipple.repeat.set(26, 16);
 class Machine {
   constructor() {
     this.group = new THREE.Group();
@@ -184,82 +289,107 @@ class Machine {
     this.tilt.rotation.x = .1;
     this.group.add(this.tilt);
     const add = (geo, mat, shadow = true) => { const m = new THREE.Mesh(geo, mat); m.castShadow = shadow; this.tilt.add(m); return m; };
-    this.bodyMat = new THREE.MeshPhysicalMaterial({ clearcoat: .25, clearcoatRoughness: .5 });
+    this.bodyMat = new THREE.MeshPhysicalMaterial({ clearcoat: 1, clearcoatRoughness: .04, roughnessMap: grain, clearcoatNormalMap: scratches, clearcoatNormalScale: new THREE.Vector2(.12, .12) });
     const body = add(bodyGeo, this.bodyMat); body.position.y = -THICK / 2 - .015; body.receiveShadow = true;
     this.body = body;
-    // What can be seen through the clear case: the boards inside it, as on the skin's own surface.
-    this.inside = add(insideGeo, insideMat(), false); this.inside.visible = false;
     add(seatGeo, blackMat, false).position.y = -.018;
     // The displays give off a little light of their own.
-    this.faceMat = new THREE.MeshPhysicalMaterial({ roughness: .55, metalness: .1, bumpScale: .7, clearcoat: .18, clearcoatRoughness: .55, emissive: 0xffffff, emissiveIntensity: .1 });
+    // The case around the pads and screens is matt moulded plastic with a fine stipple.
+    this.faceMat = new THREE.MeshPhysicalMaterial({ roughness: .82, roughnessMap: grain, metalness: 0, normalMap: stipple, normalScale: new THREE.Vector2(.55, .55), clearcoat: 0, specularIntensity: .55, emissive: 0xffffff, emissiveIntensity: .035 });
     const face = add(plateGeo, this.faceMat, false); face.rotation.x = -Math.PI / 2; face.receiveShadow = true;
-    this.keyMat = new THREE.MeshStandardMaterial({ roughness: .5, metalness: .1, vertexColors: true });
+    this.keyMat = new THREE.MeshPhysicalMaterial({ roughness: .22, metalness: 0, vertexColors: true, clearcoat: 1, clearcoatRoughness: .04, clearcoatNormalMap: scratches, clearcoatNormalScale: new THREE.Vector2(.1, .1), specularIntensity: 1 });
+    add(slotGeo, slotMat, false);
     add(keysGeo, this.keyMat).receiveShadow = true;
-    add(footGeo, rubberMat); add(screwGeo, screwMat, false);
-    add(knobGeo, knobMat); add(capGeo, capMat, false); add(markGeo, markMat, false); add(faderGeo, faderMat);
-    add(glassGeo, glassMat, false);
-    add(rimGeo, this.bodyMat, false); add(ventGeo, blackMat, false); add(socketGeo, screwMat, false); add(holeGeo, blackMat, false); add(ledGeo, ledMat, false); add(ringGeo, screwMat, false);
+    add(footGeo, rubberMat);
+    add(faderGeo, this.keyMat);
+    // The screens: glass over the picture, glowing a little and mirroring the room; the print around them is satin.
+    this.screenMat = new THREE.MeshPhysicalMaterial({ roughness: .7, metalness: 0, emissive: 0xffffff, emissiveIntensity: .32, clearcoat: 1, clearcoatRoughness: 0, specularIntensity: 1, ior: 1.52 });
+    add(screenGeo, this.screenMat, false).receiveShadow = true;
+    add(rasterGeo, rasterMat, false);
+    const seam = add(plateGeo, seamMat, false); seam.rotation.x = -Math.PI / 2; seam.position.y = .006; seam.renderOrder = 2;
+    add(rimGeo, this.bodyMat, false); add(ventGeo, blackMat, false); add(socketGeo, screwMat, false); add(holeGeo, blackMat, false); add(ledGeo, ledMat, false);
     add(baseGeo, rubberMat).position.y = -THICK - .09;
     this.pads = padGeos.map(geo => {
-      const material = new THREE.MeshPhysicalMaterial({ roughness: .72, vertexColors: true, clearcoat: .15, clearcoatRoughness: .7, emissive: 0xffffff, emissiveIntensity: 0 });
+      // The pads are soft rubber with a fine grain and a velvet sheen; when a pad lights up in the app, the light
+      // shines a little through the rubber, so its edges glow too.
+      const material = new THREE.MeshPhysicalMaterial({ roughness: .45, vertexColors: true, normalMap: rubber, normalScale: new THREE.Vector2(.18, .18), sheen: .5, sheenRoughness: .35, sheenColor: 0xffffff, clearcoat: .5, clearcoatRoughness: .14, emissive: 0xffffff, emissiveIntensity: PAD_LIGHT });
       const mesh = add(geo, material); mesh.receiveShadow = true;
       return { mesh, material, press: 0, glow: 0 };
     });
     this.skin = -1;
+    this.video = Object.assign(document.createElement('video'), { muted: true, loop: true, playsInline: true, preload: 'none' });
+    this.video.setAttribute('playsinline', ''); this.video.setAttribute('muted', '');
+    this.film = new THREE.VideoTexture(this.video); this.film.colorSpace = THREE.SRGBColorSpace; this.film.anisotropy = 8;
+    this.video.addEventListener('playing', () => { if (this.filmFor === this.skin && !this.moving) { this.moving = true; this.show(this.film); } });
     scene.add(this.group);
+  }
+  // The picture on the face, the keys and the pads: the still one, or the film of the app running in this skin.
+  show(t) {
+    this.faceMat.map = this.faceMat.emissiveMap = this.keyMat.map = this.screenMat.map = this.screenMat.emissiveMap = t;
+    this.faceMat.needsUpdate = this.keyMat.needsUpdate = this.screenMat.needsUpdate = true;
+    this.pads.forEach(p => { p.material.map = p.material.emissiveMap = t; p.material.needsUpdate = true; });
+  }
+  // Only the machines near the front play their film; the others rest on their still picture.
+  live(on) {
+    const v = this.video;
+    if (on) {
+      if (this.filmFor !== this.skin) { this.filmFor = this.skin; this.moving = false; v.src = `video/${SKINS[this.skin].key}.mp4?v=3`; }
+      if (v.paused) v.play().catch(() => {});
+    } else if (!on && !v.paused) v.pause();
   }
   wear(index) {
     if (this.skin === index) return;
     this.skin = index;
+    if (this.moving) { this.moving = false; this.video.pause(); }
     const skin = SKINS[index];
-    const pattern = PLATES.has(skin.key), clear = skin.key === '3d_clear', steel = skin.key === '3d_steel', m = this.bodyMat;
+    const pattern = PLATES.has(skin.key), steel = skin.key === '3d_steel', m = this.bodyMat;
     m.map = pattern ? plateOf(skin.key) : null;
-    m.color.setHex(clear ? 0xeaf3ef : pattern ? 0xffffff : skin.body);
-    m.metalness = steel ? .92 : clear ? 0 : pattern ? .08 : skin.metal;
-    m.roughness = steel ? .38 : clear ? .07 : pattern ? .62 : skin.rough;
-    m.transparent = clear; m.opacity = clear ? .3 : 1; m.depthWrite = !clear; m.clearcoat = clear ? 1 : .25; m.clearcoatRoughness = clear ? .05 : .5;
+    m.color.setHex(pattern ? 0xffffff : skin.body);
+    m.metalness = steel ? .95 : pattern ? .08 : skin.metal;
+    m.roughness = steel ? .3 : pattern ? .62 : skin.rough;
+    // Brushed steel: its highlights stretch out along the grain, and it has no lacquer on it.
+    m.anisotropy = steel ? .85 : 0; m.clearcoat = steel ? .15 : 1; m.clearcoatRoughness = .04;
     m.needsUpdate = true;
-    this.inside.visible = clear;
-    this.body.castShadow = !clear;
     textureOf(index).then(t => {
       if (this.skin !== index) return;
-      if (!pattern && !clear) paintBodyFrom(t, skin, m);
-      this.tray = sampleColour(t, .17, .34, .12, .06); this.trayText = this.tray.lum > .42 ? '#111214' : '#e8e9eb'; this.tray = this.tray.css;
-      this.faceMat.map = this.faceMat.bumpMap = this.faceMat.emissiveMap = this.keyMat.map = t;
-      this.faceMat.needsUpdate = this.keyMat.needsUpdate = true;
-      this.pads.forEach(p => { p.material.map = p.material.emissiveMap = t; p.material.needsUpdate = true; });
+      if (!pattern) paintBodyFrom(t, skin, m);
+      // A light face throws back far more of the lamps than a dark one: it is toned down so it does not burn out.
+      const lum = brightnessOf(t), tone = lum > .45 ? 1 - (lum - .45) * .55 : 1;
+      this.faceMat.color.setScalar(tone); this.keyMat.color.setScalar(tone); this.screenMat.color.setScalar(tone); this.screenMat.emissiveIntensity = lum > .45 ? .1 : .32; this.pads.forEach(p => p.material.color.setScalar(tone));
+      if (!this.moving) this.show(t);
       canvas.classList.add('on');
     });
   }
 }
 
+// The cases of these skins carry the pattern of their surface.
 const PLATES = new Set(['3d_camouflage', '3d_desert', '3d_urban', '3d_snow', '3d_steel']), plates = new Map();
 function plateOf(key) {
-  if (!plates.has(key)) { const t = loader.load(`skins/plate_${key}.jpg`); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.MirroredRepeatWrapping; t.anisotropy = anisotropy; plates.set(key, t); }
+  if (!plates.has(key)) { const t = loader.load(`skins/body_${key}.jpg`); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.MirroredRepeatWrapping; t.anisotropy = anisotropy; plates.set(key, t); }
   return plates.get(key);
-}
-function sampleColour(t, fx, fy, fw, fh) {
-  const g = sampler.getContext('2d', { willReadFrequently: true }), w = t.image.naturalWidth || t.image.width, h = t.image.naturalHeight || t.image.height;
-  g.drawImage(t.image, w * fx, h * fy, w * fw, h * fh, 0, 0, 60, 6);
-  const d = g.getImageData(0, 0, 60, 6).data; let r = 0, gr = 0, b = 0;
-  for (let i = 0; i < d.length; i += 4) { r += d[i]; gr += d[i + 1]; b += d[i + 2]; }
-  const n = d.length / 4; r /= n; gr /= n; b /= n;
-  return { css: `rgb(${Math.round(r)},${Math.round(gr)},${Math.round(b)})`, lum: (.2126 * r + .7152 * gr + .0722 * b) / 255 };
 }
 // The frame takes the main colour of the machine's own face.
 const sampler = document.createElement('canvas'); sampler.width = 60; sampler.height = 6;
 function paintBodyFrom(t, skin, mat) {
   const g = sampler.getContext('2d', { willReadFrequently: true }), w = t.image.naturalWidth || t.image.width, h = t.image.naturalHeight || t.image.height;
-  g.drawImage(t.image, w * .36, h * .955, w * .3, h * .016, 0, 0, 60, 6);
+  g.drawImage(t.image, w * .1, h * .978, w * .3, h * .012, 0, 0, 60, 6);
   const d = g.getImageData(0, 0, 60, 6).data; let r = 0, gr = 0, b = 0;
   for (let i = 0; i < d.length; i += 4) { r += d[i]; gr += d[i + 1]; b += d[i + 2]; }
   const n = d.length / 4, c = new THREE.Color().setRGB(r / n / 255, gr / n / 255, b / n / 255, THREE.SRGBColorSpace), light = (c.r + c.g + c.b) / 3;
   mat.color.copy(c);
-  if (light > .25) { mat.metalness = .06; mat.roughness = .5; } else mat.metalness = Math.min(skin.metal, .5);
+  // Light cases are soft-touch plastic: a satin sheen rather than a mirror; dark ones keep their deep lacquer.
+  if (light > .25) { mat.metalness = .04; mat.roughness = .55; mat.clearcoat = .35; mat.clearcoatRoughness = .32; } else mat.metalness = Math.min(skin.metal, .5);
+}
+function brightnessOf(t) {
+  const g = sampler.getContext('2d', { willReadFrequently: true });
+  g.drawImage(t.image, 0, 0, 60, 6);
+  const d = g.getImageData(0, 0, 60, 6).data; let sum = 0;
+  for (let i = 0; i < d.length; i += 4) sum += .2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2];
+  return sum / (d.length / 4) / 255;
 }
 const loader = new THREE.TextureLoader(), textures = new Map(), anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 function textureOf(index) {
-  if (!textures.has(index)) textures.set(index, new Promise(ok => loader.load(`skins/${SKINS[index].key}.jpg`, t => {
+  if (!textures.has(index)) textures.set(index, new Promise(ok => loader.load(`skins/${SKINS[index].key}.jpg?v=4`, t => {
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = anisotropy;
     ok(t);
@@ -289,10 +419,12 @@ function fit() {
   const top = document.getElementById('tag').getBoundingClientRect().bottom - canvas.parentElement.getBoundingClientRect().top + 8;
   const bottom = h - (document.getElementById('pick').getBoundingClientRect().top - canvas.parentElement.getBoundingClientRect().top) + 8;
   // The front machine fills the room between the logo and the buttons, and as much of the width as there is.
-  const across = (W + 2 * MARGIN) / (w < h * 1.1 ? .95 : .72) / camera.aspect;
-  const tall = (D * .92 + THICK * .9) * h / Math.max(120, h - top - bottom);
+  const across = (W + 2 * MARGIN) / (w < h * 1.1 ? .98 : .9) / camera.aspect;
+  const tall = (D * .74 + THICK * .7) * h / Math.max(120, h - top - bottom);
   const dist = Math.max(across, tall) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
-  radius = (W + MARGIN * 2) * .5 / Math.tan(STEP / 2) * (w < h * 1.1 ? 1.0 : 1.08);
+  // Far enough apart that two neighbours never cut into each other at any point of a turn (checked for every step
+  // of a turn with the corners of both cases; 1.25 is the least that works, the rest is room for the tilt).
+  radius = (W + MARGIN * 2) * .5 / Math.tan(STEP / 2) * 1.3;
   camera.position.set(0, dist * .68, dist * .735);
   camera.lookAt(0, -.3, -.3);
   camBase = camera.position.clone();
@@ -311,11 +443,12 @@ function place() {
   machines.forEach((m, i) => {
     const slot = nearest + i - REACH;
     m.wear(mod(slot));
-    const a = (slot - turn) * STEP;
-    // They stand back from the one in front, and turn less than the ring does, so that their near corners stay out of its way.
-    m.group.position.set(Math.sin(a) * radius, 0, (Math.cos(a) - 1) * radius * 1.7);
-    m.group.rotation.y = a * .72;
-    m.group.visible = Math.abs(a) < Math.PI * .72;
+    // One machine on a turntable: it turns away, and while its edge faces you it changes its skin.
+    const d = turn - nearest;
+    m.group.visible = slot === nearest;
+    m.group.rotation.y = d * Math.PI;
+    m.group.position.y = 0;
+    m.live(visible && !still && slot === nearest);
   });
   const current = mod(nearest);
   if (current !== shownName) {
@@ -367,120 +500,21 @@ document.getElementById('prev').onclick = () => go(-1);
 document.getElementById('next').onclick = () => go(1);
 addEventListener('keydown', e => { if (scrollY < innerHeight * .6) { if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); } });
 
-// ---- The machines run: every model with its own display, dance and effect colours, as in the app ---------------------------------
-const LIVE = { skins: null, dancer: null, clips: new Map(), visual: new Visual(), reso: newState(), clip: newState() };
-fetch('data/skins.json').then(r => r.json()).then(d => LIVE.skins = d);
-loadBin('dancers').then(d => LIVE.dancer = d);
-CLIPS.forEach(c => { if (!small) loadBin(c).then(d => LIVE.clips.set(c, d)); });
-const RESO = EFFECTS.find(e => e.k === 'resonance'), SOFT = EFFECTS.find(e => e.k === 'softClipper');
-const resoP = RESO.p.map(q => q.def); resoP[0] = 100; resoP[7] = 18; resoP[9] = -24; resoP[10] = 30; resoP[11] = -12;
-const softP = SOFT.p.map(q => q.def); softP[0] = 8; softP[2] = 100;
-const RESO_KNOBS = [[51,219,'Depth',1],[151,219,'Sharpness',.5],[252,219,'Selectivity',.5],[353,219,'Attack',.09],[453,219,'Release',.22],[554,219,'Mix',1]];
-const SOFT_KNOBS = [[75,175,'',.33],[227,175,'',.99],[379,175,'',1],[531,175,'',1]];
-const pick = (i, n) => ((i % n) + n) % n;
-const DANCE_ORDER = [7, 0, 4, 11, 5, 6, 1, 8, 3, 9, 2, 10, 12];
-const SAMPLE_WORDS = ['KICK','SNARE','CLAP','HIHAT','OPEN HAT','808','RIM','PERC','SHAKER','TOM','CRASH','RIDE','VOX CHOP','STAB','RISER','FX HIT','SUB','COWBELL','SNAP','LOOP'];
-const SAMPLE_NAMES = Array.from({ length: 80 }, (_, i) => `${SAMPLE_WORDS[i % 20]} ${(i * 7) % 19 + 1}.WAV`);
-const SAMPLE_TIMES = SAMPLE_NAMES.map((_, i) => `0:0${(i * 3) % 3}.${String((i * 37) % 90 + 10)}`);
-
-function liveLayer(x0, y0, x1, y1, scale, y = .02) {
-  const c = document.createElement('canvas'), w = x1 - x0, h = y1 - y0;
-  c.width = Math.round(w * scale); c.height = Math.round(h * scale);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = anisotropy;
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w / 100, h / 100).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: t, toneMapped: false }));
-  m.position.set(X((x0 + x1) / 2), y, Z((y0 + y1) / 2));
-  return { c, t, m, g: c.getContext('2d'), w, h, scale };
-}
-const headMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .8 });
-const headSeqGeo = new THREE.BoxGeometry(.016, .012, 3.27), headRollGeo = new THREE.BoxGeometry(.016, .012, 2.79);
-const q = small ? 1 : 1.5;
-machines.forEach(m => {
-  m.live = { out: liveLayer(1356, 97, 1906, 163, q), man: liveLayer(1917, 97, 1983, 163, small ? 1 : 2), reso: liveLayer(1357, 224, 1968, 492, q), clip: liveLayer(1357, 503, 1968, 702, q), pos: liveLayer(1062, 11, 1155, 41, 2), lib: liveLayer(17, 141, 648, 584, q), key: liveLayer(721, 9, 770, 41, 2, .118), seq: new THREE.Mesh(headSeqGeo, headMat), roll: new THREE.Mesh(headRollGeo, headMat), skin: -1 };
-  ['out', 'man', 'reso', 'clip', 'pos', 'lib', 'key'].forEach(k => m.tilt.add(m.live[k].m));
-  m.live.seq.position.set(X(168), .024, Z(940)); m.live.roll.position.set(X(1073), .024, Z(964));
-  m.tilt.add(m.live.seq, m.live.roll);
-});
-const fit2 = l => l.g.setTransform(l.scale, 0, 0, l.scale, 0, 0);
-function card(l, name, sum, colour, knobs, top, height, drawPicture, sk) {
-  const g = l.g; fit2(l);
-  g.fillStyle = '#17181b'; g.fillRect(0, 0, l.w, l.h);
-  g.save(); g.translate(0, top); g.beginPath(); g.rect(0, 0, l.w, height); g.clip(); drawPicture(g, l.w, height); g.restore();
-  g.strokeStyle = colour; g.lineWidth = 1.5; g.strokeRect(1, 1, l.w - 2, l.h - 2);
-  g.fillStyle = colour; g.beginPath(); g.arc(19, 19, 6, 0, 7); g.fill();
-  g.font = 'bold 16px Helvetica, Arial, sans-serif'; g.textBaseline = 'middle'; g.fillText(name, 54, 19.5);
-  const nw = g.measureText(name).width;
-  g.fillStyle = '#a6a6ac'; g.font = '14px Helvetica, Arial, sans-serif'; g.fillText(sum, 54 + nw + 12, 19.5);
-  g.fillStyle = colour; g.globalAlpha = .16; g.fillRect(l.w - 88, 8, 46, 22); g.globalAlpha = 1; g.font = '13px Helvetica, Arial, sans-serif'; g.fillText('14', l.w - 66, 19.5);
-  g.strokeStyle = colour; g.lineWidth = 1.2; g.strokeRect(l.w - 83, 12, 8, 7); g.strokeRect(l.w - 80, 16, 8, 7);
-  g.strokeStyle = '#e1e1e4'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(l.w - 113, 14); g.lineTo(l.w - 103, 24); g.moveTo(l.w - 103, 14); g.lineTo(l.w - 113, 24); g.moveTo(l.w - 30, 22); g.lineTo(l.w - 25, 16); g.lineTo(l.w - 20, 22); g.stroke();
-  knobs.forEach(([x, y, label, share]) => {
-    const st = -Math.PI * 1.25, en = Math.PI * .25;
-    g.lineWidth = 3; g.strokeStyle = '#3d3e42'; g.beginPath(); g.arc(x, y, 21, st, en); g.stroke();
-    if (share > 0) { g.strokeStyle = colour; g.beginPath(); g.arc(x, y, 21, st, st + share * (en - st)); g.stroke(); }
-    if (label) { g.fillStyle = '#a6a6ac'; g.font = '13px Helvetica, Arial, sans-serif'; g.textAlign = 'center'; g.fillText(label.toUpperCase(), x, y + 38); g.textAlign = 'left'; }
-  });
-  g.textBaseline = 'alphabetic'; l.t.needsUpdate = true;
-}
-function library(l, tray, text, beat, seed) {
-  const g = l.g; fit2(l); g.fillStyle = tray; g.fillRect(0, 0, l.w, l.h);
-  const row = 29, tick = Math.floor(beat * 4), offset = tick + seed * 11, lit = 5 + (tick % 7);
-  g.font = '16px Helvetica, Arial, sans-serif'; g.textBaseline = 'middle';
-  for (let i = 0; i < 16; i++) {
-    const n = (offset + i) % SAMPLE_NAMES.length, y = 4 + i * row;
-    if (i === lit) { g.fillStyle = text; g.globalAlpha = .16; g.fillRect(0, y, l.w, row); g.globalAlpha = 1; }
-    g.fillStyle = text; g.globalAlpha = i === lit ? 1 : .82; g.fillText(SAMPLE_NAMES[n], 96, y + row / 2 + 1);
-    g.globalAlpha = .6; g.textAlign = 'right'; g.font = '14px Helvetica, Arial, sans-serif'; g.fillText(SAMPLE_TIMES[n], l.w - 22, y + row / 2 + 1); g.textAlign = 'left'; g.font = '16px Helvetica, Arial, sans-serif'; g.globalAlpha = 1;
-  }
-  g.textBaseline = 'alphabetic'; l.t.needsUpdate = true;
-}
-function drawMachine(m, index, now, sk) {
-  const L = m.live, skinIndex = m.skin, col = t => mixColour(sk.level1, sk.level2, t), beat = liveBeat + index * .5;
-  const clipPick = pick(skinIndex, 6) === 5 ? CLIPS[pick(skinIndex, CLIPS.length)] : null;
-  const o = L.out; fit2(o); o.g.fillStyle = '#101113'; o.g.fillRect(0, 0, o.w, o.h);
-  if (clipPick && LIVE.clips.get(clipPick)) paintClip(o.g, o.w, o.h, LIVE.clips.get(clipPick), beat, col);
-  else LIVE.visual.paint(o.g, o.w, o.h, pick(skinIndex, 4), pick(skinIndex, 3) + 2, col);
-  o.t.needsUpdate = true;
-  const a = L.man; fit2(a); a.g.fillStyle = '#101113'; a.g.fillRect(0, 0, a.w, a.h);
-  if (LIVE.dancer) paintDancer(a.g, a.w, a.h, LIVE.dancer, DANCE_ORDER[pick(skinIndex, 13)], beat, sk.screenText);
-  a.t.needsUpdate = true;
-  const c1 = sk.effects[pick(skinIndex * 3 + 1, 8)], c2 = sk.effects[pick(skinIndex * 5 + 4, 8)], pal = { clipper: sk.clipper, text: '#e1e1e4', edge: '#2b2c30', faint: '#a6a6ac', accent: sk.accent, accentText: sk.accentText };
-  card(L.reso, 'RESONANCE SUPPRESSOR', 'DEPTH 100 %', c1, RESO_KNOBS, 40, 140, (g, w, h) => paintEffect(g, w, h, 'resonance', resoP, LIVE.reso, true, { ...pal, colour: c1 }), sk);
-  card(L.clip, 'SOFT CLIPPER', 'SOFTNESS 100 %', c2, SOFT_KNOBS, 40, 108, (g, w, h) => paintEffect(g, w, h, 'softClipper', softP, LIVE.clip, true, { ...pal, colour: c2 }), sk);
-  if (m.tray) library(L.lib, m.tray, m.trayText, beat, skinIndex);
-  const p = L.pos; fit2(p); p.g.fillStyle = '#101113'; p.g.fillRect(0, 0, p.w, p.h);
-  const bar = Math.floor(beat / 4) % 8 + 1, bt = Math.floor(beat) % 4 + 1, st = Math.floor(beat * 4) % 4 + 1;
-  p.g.fillStyle = sk.screenText; p.g.font = '9px Helvetica, Arial, sans-serif'; p.g.globalAlpha = .75; p.g.fillText('POSITION', 7, 10); p.g.globalAlpha = 1; p.g.font = '17px Helvetica, Arial, sans-serif'; p.g.fillText(`${String(bar).padStart(3, '0')}.${bt}.${st}`, 7, 26); p.t.needsUpdate = true;
-  const loop = (beat % 8) / 8; L.seq.position.x = X(168 + loop * 794); L.roll.position.x = X(1073 + loop * 884);
-  if (L.skin !== skinIndex) { L.skin = skinIndex; const k = L.key, g = k.g; fit2(k); g.fillStyle = sk.accent; g.fillRect(0, 0, k.w, k.h); g.fillStyle = sk.accentText; g.beginPath(); g.moveTo(18, 8); g.lineTo(33, 16); g.lineTo(18, 24); g.closePath(); g.fill(); k.t.needsUpdate = true; }
-}
-let liveBeat = 0, liveLevel = 0, liveLast = 0, liveFrame = 0;
-function runLive(now, dt, tempo) {
-  const front = machines[REACH];
+// ---- The light under the machines takes the colours of the front one's level meters ------------------------------------------
+let liveLevel = 0, liveLast = 0, liveBeat = 0;
+function runLive(dt, tempo) {
   liveBeat += dt * tempo / 60;
   liveLevel *= Math.exp(-dt / .16);
   const qt = Math.floor(liveBeat * 4);
   if (qt !== liveLast) { liveLast = qt; const s = qt % 16; if (s === 0 || s === 10) liveLevel = 1; else if (s === 4 || s === 12) liveLevel = .85; else liveLevel = Math.max(liveLevel, .28); }
-  if (!LIVE.skins) return;
-  const fk = LIVE.skins[SKINS[front.skin].key]; if (!fk) return;
-  glowWanted.setStyle(fk.level1, THREE.LinearSRGBColorSpace).lerp(new THREE.Color().setStyle(fk.level2, THREE.LinearSRGBColorSpace), .4).lerp(new THREE.Color(0xffffff), .28);
+  const sk = SKINS[machines[REACH].skin];
+  glowWanted.setStyle(sk.level1, THREE.LinearSRGBColorSpace).lerp(new THREE.Color().setStyle(sk.level2, THREE.LinearSRGBColorSpace), .4).lerp(new THREE.Color(0xffffff), .28);
   glowEl.style.setProperty('--g', `${Math.round(glowWanted.r * 255)},${Math.round(glowWanted.g * 255)},${Math.round(glowWanted.b * 255)}`);
   glowEl.style.opacity = (.88 + liveLevel * .12).toFixed(2);
-  LIVE.visual.step(dt, null, null, null, liveLevel, now / 1000);
-  const spec = new Float32Array(48); for (let i = 0; i < 48; i++) spec[i] = LIVE.visual.barAt(i / 47) * .92;
-  stepState(LIVE.reso, 'resonance', resoP, dt, liveLevel, spec);
-  stepState(LIVE.clip, 'softClipper', softP, dt, liveLevel, null);
-  liveFrame++;
-  machines.forEach((m, i) => {
-    const away = Math.abs(i - REACH), sk = LIVE.skins[SKINS[m.skin].key]; if (!sk || !m.group.visible) return;
-    if (away === 0 || m.live.skin !== m.skin) drawMachine(m, i, now, sk);
-    else if (away === 1 && !small && (liveFrame + i) % 4 === 0) drawMachine(m, i, now, sk);
-    else if (away === 1 && small && (liveFrame + i) % 12 === 0) drawMachine(m, i, now, sk);
-  });
 }
 
 // ---- Playing -------------------------------------------------------------------------------------------------------
 function strike(p) { p.press = 1; p.glow = 1; }
-const BEAT = [[0,8],[8],[4,8],[8],[0,8],[8,10],[4,8,15],[3,8]];
 const TEMPO = 134;
 let step = 0, nextStep = 700, lastFrame = performance.now(), visible = true, nextTurn = 7000;
 new IntersectionObserver(l => { visible = l[0].isIntersecting; }, { threshold: .02 }).observe(canvas);
@@ -497,13 +531,12 @@ function tick(now) {
   place();
 
   const front = machines[REACH];
-  if (!still && now > nextStep) { nextStep = now + 60000 / TEMPO / 2; BEAT[step++ % BEAT.length].forEach(i => strike(front.pads[i])); }
   machines.forEach(m => m.pads.forEach(p => {
-    if (p.press < .001 && p.glow < .002) { if (p.mesh.position.y !== 0) { p.mesh.position.y = 0; p.material.emissiveIntensity = 0; } return; }
+    if (p.press < .001 && p.glow < .002) { if (p.mesh.position.y !== 0) { p.mesh.position.y = 0; p.material.emissiveIntensity = PAD_LIGHT; } return; }
     p.press *= Math.exp(-dt / .05);
     p.glow *= Math.exp(-dt / .16);
     p.mesh.position.y = -.11 * p.press;
-    p.material.emissiveIntensity = p.glow * .85;
+    p.material.emissiveIntensity = PAD_LIGHT + p.glow * .85;
   }));
   if (!still) {
     lookX += (wantX + Math.sin(now * .00023) * .35 - lookX) * Math.min(1, dt * 2.4);
@@ -511,8 +544,109 @@ function tick(now) {
     camera.position.set(camBase.x + lookX * 1.5, camBase.y - lookY * .8, camBase.z);
     camera.lookAt(camAim);
   }
-  if (visible) runLive(now, dt, TEMPO);
+  if (visible) runLive(dt, TEMPO);
   renderer.render(scene, camera);
 }
 place();
 requestAnimationFrame(tick);
+
+// ---- The price, as letters of the STEPPER font standing in the same studio, under the same lacquer ----------------------
+{
+  const host = document.getElementById('price3d');
+  // The letters as the app draws them (PixelFont.h); the dollar is the S of the font with a bar through it.
+  const S = ['...#########...', '.#############.', '#####.....#####', '####.......####', '####...........', '#####..........', '.###########...', '..#############', '....###########', '..........#####', '...........####', '...........####', '####.......####', '#####.....#####', '.#############.', '...#########...'];
+  const ONE = ['....####....', '..######....', '.#######....', '....####....', '....####....', '....####....', '....####....', '....####....', '....####....', '....####....', '....####....', '....####....', '....####....', '############', '############', '############'];
+  const DOLLAR = ['......###......', '......###......', ...S, '......###......', '......###......'].map((r, i) => i >= 2 && i < 18 ? r.slice(0, 6) + '###' + r.slice(9) : r);
+  const cells = new Set(), at = (x, y) => cells.has(x + ',' + y);
+  const put = (rows, x0, y0) => rows.forEach((r, y) => [...r].forEach((c, x) => { if (c === '#') cells.add((x0 + x) + ',' + (y0 + y)); }));
+  put(ONE, 0, 2); put(DOLLAR, 15, 0);
+  // The outline of all cells together, so each letter is one solid with one rounded edge all around.
+  const edges = new Map(), key = (x, y) => x + ',' + y;
+  const edge = (x1, y1, x2, y2) => { const k = key(x1, y1); if (!edges.has(k)) edges.set(k, []); edges.get(k).push([x2, y2]); };
+  cells.forEach(c => {
+    const [x, y] = c.split(',').map(Number);
+    if (!at(x, y - 1)) edge(x, y, x + 1, y);
+    if (!at(x + 1, y)) edge(x + 1, y, x + 1, y + 1);
+    if (!at(x, y + 1)) edge(x + 1, y + 1, x, y + 1);
+    if (!at(x - 1, y)) edge(x, y + 1, x, y);
+  });
+  const loops = [];
+  while (edges.size) {
+    const [start] = edges.keys(); let [x, y] = start.split(',').map(Number); const loop = [[x, y]];
+    let dx = 0, dy = 0;
+    for (;;) {
+      const list = edges.get(key(x, y)); if (!list) break;
+      // Where two cells only touch at a corner, turn right first, so each one keeps its own outline.
+      let pick = 0;
+      if (list.length > 1 && (dx || dy)) {
+        const rank = ([nx, ny]) => { const ex = nx - x, ey = ny - y, cross = dx * ey - dy * ex; return cross > 0 ? 0 : cross === 0 ? 1 : 2; };
+        list.forEach((q, i) => { if (rank(q) < rank(list[pick])) pick = i; });
+      }
+      const [nx, ny] = list.splice(pick, 1)[0]; if (!list.length) edges.delete(key(x, y));
+      dx = nx - x; dy = ny - y; x = nx; y = ny; if (key(x, y) === start) break; loop.push([x, y]);
+    }
+    // Only the corners stay, so the bevel runs cleanly along each side.
+    loops.push(loop.filter((p, i) => { const a = loop[(i + loop.length - 1) % loop.length], b = loop[(i + 1) % loop.length]; return (p[0] - a[0]) * (b[1] - p[1]) !== (p[1] - a[1]) * (b[0] - p[0]); }));
+  }
+  const area = l => l.reduce((s, p, i) => { const q = l[(i + 1) % l.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0) / 2;
+  const toShape = (l, Cls) => { const s = new Cls(); l.forEach(([x, y], i) => i ? s.lineTo(x - 15, 10 - y) : s.moveTo(x - 15, 10 - y)); s.closePath(); return s; };
+  // The same outline moved inwards by d cells all around: the screen inside the black frame.
+  const inset = (l, d) => l.map((p, i) => {
+    const a = l[(i + l.length - 1) % l.length], b = l[(i + 1) % l.length];
+    const n1 = [-(p[1] - a[1]), p[0] - a[0]], n2 = [-(b[1] - p[1]), b[0] - p[0]], len = v => Math.hypot(v[0], v[1]) || 1;
+    return [p[0] + d * (n1[0] / len(n1) + n2[0] / len(n2)), p[1] + d * (n1[1] / len(n1) + n2[1] / len(n2))];
+  });
+  const outer = loops.filter(l => area(l) > 0), holes = loops.filter(l => area(l) < 0);
+  const shapes = outer.map(l => toShape(l, THREE.Shape));
+  // Each hole goes into the letter around it.
+  const inside = ([px, py], l) => { let c = false; for (let i = 0, j = l.length - 1; i < l.length; j = i++) { const [xi, yi] = l[i], [xj, yj] = l[j]; if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) c = !c; } return c; };
+  const screens = outer.map(l => toShape(inset(l, .75), THREE.Shape));
+  holes.forEach(h => { const p = [h[0][0] + .5, h[0][1] + .5], i = Math.max(0, outer.findIndex(l => inside(p, l))); shapes[i].holes.push(toShape(h, THREE.Path)); screens[i].holes.push(toShape(inset(h, .75), THREE.Path)); });
+  const geo = new THREE.ExtrudeGeometry(shapes, { depth: 3.2, bevelEnabled: true, bevelThickness: .45, bevelSize: .32, bevelSegments: 5, curveSegments: 1 }).translate(0, 0, -1.6);
+
+  const r2 = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  r2.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+  r2.toneMapping = THREE.AgXToneMapping; r2.toneMappingExposure = 1.05;
+  r2.shadowMap.enabled = true; r2.shadowMap.type = THREE.PCFSoftShadowMap;
+  host.appendChild(r2.domElement);
+  const s2 = new THREE.Scene();
+  s2.environment = new THREE.PMREMGenerator(r2).fromScene(studio, .012).texture;
+  s2.environmentIntensity = 1.4;
+  const lamp = new THREE.DirectionalLight(0xfff3e6, 1.6); lamp.position.set(-12, 18, 22); s2.add(lamp);
+  const back = new THREE.DirectionalLight(0x9ebcff, .9); back.position.set(14, 6, -14); s2.add(back);
+  // A light from behind that catches the edges, so the black letters stand clear of the glow behind them.
+  const rim2 = new THREE.DirectionalLight(0xdfe8ff, 1.6); rim2.position.set(-6, 10, -30); s2.add(rim2);
+  s2.add(new THREE.HemisphereLight(0xdfe6ff, 0x1a1712, .3));
+  // A black case under a hard, mirror-like lacquer, like the machines at the top of the page ...
+  const word = new THREE.Group();
+  word.add(new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color: 0x0b0b0d, roughness: .18, metalness: .2, clearcoat: 1, clearcoatRoughness: .02, specularIntensity: 1 })));
+  // ... and inside its outline a screen with the Blocks visualizer of the app running on it, under glass
+  // (the recording cut to the display and set on black so the blocks stand out; only its lower part is used, so the
+  // loud moments reach right up to the top of the letters).
+  const film = Object.assign(document.createElement('video'), { muted: true, loop: true, playsInline: true, preload: 'none', src: 'rec/vis_price.mp4?v=4' });
+  film.setAttribute('playsinline', ''); film.setAttribute('muted', '');
+  const filmTex = new THREE.VideoTexture(film); filmTex.colorSpace = THREE.SRGBColorSpace;
+  const screenGeo = new THREE.ShapeGeometry(screens);
+  { const pos = screenGeo.attributes.position, uv = screenGeo.attributes.uv; for (let i = 0; i < pos.count; i++) uv.setXY(i, (pos.getX(i) + 15) / 30, (pos.getY(i) + 10) / 20 * .6); }
+  const screen = new THREE.Mesh(screenGeo, new THREE.MeshPhysicalMaterial({ color: 0x0e0e12, emissive: 0xffffff, emissiveMap: filmTex, emissiveIntensity: .85, toneMapped: false, roughness: .05, clearcoat: 1, clearcoatRoughness: .01, specularIntensity: 1 }));
+  screen.position.z = 2.06;
+  word.add(screen);
+  s2.add(word);
+  const cam = new THREE.PerspectiveCamera(22, 1, 10, 400);
+  cam.position.set(0, 0, 86);
+  let seen = false, mx = 0, my = 0;
+  new IntersectionObserver(l => { seen = l[0].isIntersecting; }, { threshold: 0 }).observe(host);
+  if (matchMedia('(pointer:fine)').matches) addEventListener('pointermove', e => { mx = e.clientX / innerWidth * 2 - 1; my = e.clientY / innerHeight * 2 - 1; }, { passive: true });
+  const size = () => { const w = host.clientWidth, h = host.clientHeight; r2.setSize(w, h, false); cam.aspect = w / h; const t = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)); cam.position.z = Math.max(12.5 / t, 18.5 / (t * cam.aspect)); cam.updateProjectionMatrix(); };
+  addEventListener('resize', size); size();
+  const spin = t => {
+    requestAnimationFrame(spin);
+    if (!seen) { if (!film.paused) film.pause(); return; }
+    if (film.paused && !still) film.play().catch(() => {});
+    // It turns slowly to and fro, and leans towards the pointer, so the lights run over its edges.
+    word.rotation.y = (still ? 0 : Math.sin(t * .0006) * .32) + mx * .25;
+    word.rotation.x = (still ? 0 : Math.sin(t * .00043) * .08) + my * .12;
+    r2.render(s2, cam);
+  };
+  requestAnimationFrame(spin);
+}
